@@ -25,6 +25,7 @@ from ansible.errors import AnsibleError
 from ansible.module_utils.six import string_types
 from ansible.module_utils._text import to_native, to_text
 from ansible.plugins.action import ActionBase
+from ansible.constants import mk_boolean as boolean
 
 
 class ActionModule(ActionBase):
@@ -34,7 +35,7 @@ class ActionModule(ActionBase):
     VALID_FILE_EXTENSIONS = ['yaml', 'yml', 'json']
     VALID_DIR_ARGUMENTS = ['dir', 'depth', 'files_matching', 'ignore_files', 'extensions']
     VALID_FILE_ARGUMENTS = ['file', '_raw_params']
-    VALID_ALL = ['name']
+    VALID_ALL = ['name', 'overwrite']
 
     def _set_dir_defaults(self):
         if not self.depth:
@@ -69,6 +70,7 @@ class ActionModule(ActionBase):
         self.depth = self._task.args.get('depth', None)
         self.files_matching = self._task.args.get('files_matching', None)
         self.ignore_files = self._task.args.get('ignore_files', None)
+        self.overwrite = boolean(self._task.args.get('overwrite', 'yes'))
         self.valid_extensions = self._task.args.get('extensions', self.VALID_FILE_EXTENSIONS)
 
         # convert/validate extensions list
@@ -82,6 +84,7 @@ class ActionModule(ActionBase):
         """
         if task_vars is None:
             task_vars = dict()
+        self.task_vars = task_vars
 
         self.show_content = True
         self.included_files = []
@@ -242,6 +245,8 @@ class ActionModule(ActionBase):
                 err_msg = ('{0} must be stored as a dictionary/hash' .format(filename))
             else:
                 self.included_files.append(filename)
+                if not self.overwrite:
+                    data = { var:data[var] for var in data if var not in self.task_vars }
                 results.update(data)
 
         return failed, err_msg, results
