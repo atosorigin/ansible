@@ -101,8 +101,20 @@ Installing the Control Machine
 ``````````````````````````````
 .. _from_yum:
 
-Latest Release Via Yum
-++++++++++++++++++++++
+Latest Release via DNF or Yum
++++++++++++++++++++++++++++++
+
+On Fedora:
+
+.. code-block:: bash
+
+    $ sudo dnf install ansible
+
+On RHEL and CentOS:
+
+.. code-block:: bash
+
+    $ sudo yum install ansible
 
 .. note:: We've changed how the Ansible community packages are distributed.
   For users of RHEL/CentOS/Scientific Linux version 7, the Ansible community RPM
@@ -269,7 +281,7 @@ If you are installing on OS X Mavericks, you may encounter some noise from your 
 
    $ sudo CFLAGS=-Qunused-arguments CPPFLAGS=-Qunused-arguments pip install ansible
 
-Readers that use virtualenv can also install Ansible under virtualenv, though we'd recommend to not worry about it and just install Ansible globally.  Do not use easy_install to install ansible directly.
+Readers that use virtualenv can also install Ansible under virtualenv, though we'd recommend to not worry about it and just install Ansible globally.  Do not use easy_install to install Ansible directly.
 
 .. _tagged_releases:
 
