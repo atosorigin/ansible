@@ -56,6 +56,11 @@ options:
     description:
       - List of file extensions to read when using C(dir).
     default: [yaml, yml, json]
+  overwrite:
+    version_added: "2.6"
+    description:
+      - Defines whether existing variables should be overwritten.
+    default: yes (default) / no
   free-form:
     description:
       - This module allows you to specify the 'file' option directly without any other options.
