@@ -56,7 +56,7 @@
   include_vars:
     dir: vars
   register: include_every_dir
-  
+
 - name: verify that the correct files have been loaded and overwrite based on alphabetical order
   assert:
     that:
