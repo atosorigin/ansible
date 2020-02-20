@@ -9,7 +9,7 @@ __metaclass__ = type
 
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['stableinterface'],
-                    'supported_by': 'certified'}
+                    'supported_by': 'community'}
 
 
 DOCUMENTATION = '''
@@ -24,15 +24,18 @@ options:
     description:
       - Name of the key pair.
     required: true
+    type: str
   key_material:
     description:
       - Public key material.
     required: false
+    type: str
   force:
     description:
       - Force overwrite of already existing key pair if key has changed.
     required: false
     default: true
+    type: bool
     version_added: "2.3"
   state:
     description:
@@ -40,18 +43,18 @@ options:
     required: false
     choices: [ present, absent ]
     default: 'present'
+    type: str
   wait:
     description:
-      - Wait for the specified action to complete before returning. This option has no effect since version 2.5.
-    required: false
-    default: false
+      - This option has no effect since version 2.5 and will be removed in 2.14.
     version_added: "1.6"
+    type: bool
   wait_timeout:
     description:
-      - How long before wait gives up, in seconds. This option has no effect since version 2.5.
-    required: false
-    default: 300
+      - This option has no effect since version 2.5 and will be removed in 2.14.
     version_added: "1.6"
+    type: int
+    required: false
 
 extends_documentation_fragment:
   - aws
@@ -102,7 +105,7 @@ changed:
 msg:
   description: short message describing the action taken
   returned: always
-  type: string
+  type: str
   sample: key pair created
 key:
   description: details of the keypair (this is set to null when state is absent)
@@ -112,17 +115,17 @@ key:
     fingerprint:
       description: fingerprint of the key
       returned: when state is present
-      type: string
+      type: str
       sample: 'b0:22:49:61:d9:44:9d:0c:7e:ac:8a:32:93:21:6c:e8:fb:59:62:43'
     name:
       description: name of the keypair
       returned: when state is present
-      type: string
+      type: str
       sample: my_keypair
     private_key:
       description: private key of a newly created keypair
       returned: when a new keypair is created by AWS (key_material is not provided)
-      type: string
+      type: str
       sample: '-----BEGIN RSA PRIVATE KEY-----
         MIIEowIBAAKC...
         -----END RSA PRIVATE KEY-----'
@@ -131,13 +134,12 @@ key:
 import uuid
 
 from ansible.module_utils.aws.core import AnsibleAWSModule
-from ansible.module_utils.ec2 import ec2_argument_spec, get_aws_connection_info, boto3_conn
 from ansible.module_utils._text import to_bytes
 
 try:
     from botocore.exceptions import ClientError
 except ImportError:
-    pass
+    pass  # caught by AnsibleAWSModule
 
 
 def extract_key_data(key):
@@ -178,6 +180,8 @@ def find_key_pair(module, ec2_client, name):
         if err.response['Error']['Code'] == "InvalidKeyPair.NotFound":
             return None
         module.fail_json_aws(err, msg="error finding keypair")
+    except IndexError:
+        key = None
     return key
 
 
@@ -186,13 +190,16 @@ def create_key_pair(module, ec2_client, name, key_material, force):
     key = find_key_pair(module, ec2_client, name)
     if key:
         if key_material and force:
-            new_fingerprint = get_key_fingerprint(module, ec2_client, key_material)
-            if key['KeyFingerprint'] != new_fingerprint:
-                if not module.check_mode:
+            if not module.check_mode:
+                new_fingerprint = get_key_fingerprint(module, ec2_client, key_material)
+                if key['KeyFingerprint'] != new_fingerprint:
                     delete_key_pair(module, ec2_client, name, finish_task=False)
                     key = import_key_pair(module, ec2_client, name, key_material)
-                key_data = extract_key_data(key)
-                module.exit_json(changed=True, key=key_data, msg="key pair updated")
+                    key_data = extract_key_data(key)
+                    module.exit_json(changed=True, key=key_data, msg="key pair updated")
+            else:
+                # Assume a change will be made in check mode since a comparison can't be done
+                module.exit_json(changed=True, key=extract_key_data(key), msg="key pair updated")
         key_data = extract_key_data(key)
         module.exit_json(changed=False, key=key_data, msg="key pair already exists")
     else:
@@ -236,23 +243,18 @@ def delete_key_pair(module, ec2_client, name, finish_task=True):
 
 def main():
 
-    argument_spec = ec2_argument_spec()
-    argument_spec.update(
-        dict(
-            name=dict(required=True),
-            key_material=dict(),
-            force=dict(type='bool', default=True),
-            state=dict(default='present', choices=['present', 'absent']),
-            wait=dict(type='bool', default=False),
-            wait_timeout=dict(default=300)
-        )
+    argument_spec = dict(
+        name=dict(required=True),
+        key_material=dict(),
+        force=dict(type='bool', default=True),
+        state=dict(default='present', choices=['present', 'absent']),
+        wait=dict(type='bool', removed_in_version='2.14'),
+        wait_timeout=dict(type='int', removed_in_version='2.14')
     )
 
     module = AnsibleAWSModule(argument_spec=argument_spec, supports_check_mode=True)
 
-    region, ec2_url, aws_connect_params = get_aws_connection_info(module, boto3=True)
-
-    ec2_client = boto3_conn(module, conn_type='client', resource='ec2', region=region, endpoint=ec2_url, **aws_connect_params)
+    ec2_client = module.client('ec2')
 
     name = module.params['name']
     state = module.params.get('state')

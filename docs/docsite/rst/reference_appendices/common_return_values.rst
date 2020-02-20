@@ -1,17 +1,17 @@
+.. _common_return_values:
+
 Return Values
 -------------
 
 .. contents:: Topics
 
 Ansible modules normally return a data structure that can be registered into a variable, or seen directly when output by
-the `ansible` program. Each module can optionally document its own unique return values (visible through ansible-doc and https://docs.ansible.com).
+the `ansible` program. Each module can optionally document its own unique return values (visible through ansible-doc and on the :ref:`main docsite<ansible_documentation>`).
 
 This document covers return values common to all modules.
 
 .. note:: Some of these keys might be set by Ansible itself once it processes the module's return information.
 
-
-.. _common_return_values:
 
 Common
 ^^^^^^
@@ -23,6 +23,11 @@ For those modules that implement `backup=no|yes` when manipulating files, a path
 changed
 ```````
 A boolean indicating if the task had to make changes.
+
+diff
+````
+
+Information on differences between the previous and current state. Often a dictionary with entries ``before`` and ``after``, which will then be formatted by the callback plugin to a diff view.
 
 failed
 ``````
@@ -92,11 +97,9 @@ This key contains a list of dictionaries that will be presented to the user. Key
 
    :ref:`all_modules`
        Learn about available modules
-   `GitHub Core modules directory <https://github.com/ansible/ansible-modules-core/tree/devel>`_
-       Browse source of core modules
-   `Github Extras modules directory <https://github.com/ansible/ansible-modules-extras/tree/devel>`_
-       Browse source of extras modules.
-   `Mailing List <http://groups.google.com/group/ansible-devel>`_
+   `GitHub modules directory <https://github.com/ansible/ansible/tree/devel/lib/ansible/modules>`_
+       Browse source of core and extras modules
+   `Mailing List <https://groups.google.com/group/ansible-devel>`_
        Development mailing list
    `irc.freenode.net <http://irc.freenode.net>`_
        #ansible IRC chat channel

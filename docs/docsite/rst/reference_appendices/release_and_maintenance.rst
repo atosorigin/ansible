@@ -3,7 +3,7 @@
 Release and maintenance
 =======================
 
-.. contents:: Topics
+.. contents::
    :local:
 
 .. _release_cycle:
@@ -11,66 +11,63 @@ Release and maintenance
 Release cycle
 `````````````
 
-Ansible is developed and released on a flexible 4 months release cycle.
+Ansible is developed and released on a flexible six month release cycle.
 This cycle can be extended in order to allow for larger changes to be properly
 implemented and tested before a new release is made available.
 
-Ansible has a graduated support structure that extends to three major releases.
-For more information, read about the :ref: `_development_and_stable_versiona_maintenance_workflow` or see
-the chart in :ref:`schedule` for the degrees to which current releases are supported.
+Ansible has a graduated maintenance structure that extends to three major releases.
+For more information, read about the :ref:`development_and_stable_version_maintenance_workflow` or
+see the chart in :ref:`release_schedule` for the degrees to which current releases are maintained.
 
-.. note:: Support for three major releases began with Ansible-2.4. Ansible-2.3 and older versions
-    are only supported for two releases.
-
-If you are using a release of Ansible that is no longer supported, we strongly
+If you are using a release of Ansible that is no longer maintained, we strongly
 encourage you to upgrade as soon as possible in order to benefit from the
 latest features and security fixes.
 
-Older, unsupported versions of Ansible can contain unfixed security
+Older, unmaintained versions of Ansible can contain unfixed security
 vulnerabilities (*CVE*).
 
-You can refer to the `porting guides`_ for tips on updating your Ansible
+You can refer to the :ref:`porting guides<porting_guides>` for tips on updating your Ansible
 playbooks to run on newer versions.
-
-.. _porting guides: https://docs.ansible.com/ansible/porting_guides.html
 
 .. _release_schedule:
 
 Release status
 ``````````````
+This table links to the release notes for each major release. These release notes (changelogs) contain the dates and significant changes in each minor release.
 
-===============   ==========================   =================================================
-Ansible Release   Latest Version               Status
-===============   ==========================   =================================================
-devel             `2.6` (unreleased, trunk)    In development
-2.5               `2.5.0`_ (2018-03-23)        Supported (security **and** general bugfixes)
-2.4               `2.4.4`_ (2018-01-31)        Supported (security **and** critical bug fixes)
-2.3               `2.3.3`_ (2017-12-20)        Unsupported (end of life)
-2.2               `2.2.3`_ (2017-05-09)        Unsupported (end of life)
-2.1               `2.1.6`_ (2017-06-01)        Unsupported (end of life)
-2.0               `2.0.2`_ (2016-04-19)        Unsupported (end of life)
-1.9               `1.9.6`_ (2016-04-15)        Unsupported (end of life)
-<1.9              n/a                          Unsupported (end of life)
-===============   ==========================   =================================================
+==============================      =================================================
+Ansible Release                     Status
+==============================      =================================================
+devel                               In development (2.10 unreleased, trunk)
+`2.9 Release Notes`_                Maintained (security **and** general bug fixes)
+`2.8 Release Notes`_                Maintained (security **and** critical bug fixes)
+`2.7 Release Notes`_                Maintained (security fixes)
+`2.6 Release Notes`_                Unmaintained (end of life)
+`2.5 Release Notes`_                Unmaintained (end of life)
+<2.5                                Unmaintained (end of life)
+==============================      =================================================
 
-.. note:: Starting with Ansible-2.4, support lasts for 3 releases.  Thus Ansible-2.4 will receive
+You can download the releases from `<https://releases.ansible.com/ansible/>`_.
+
+.. note:: Ansible maintenance continues for 3 releases.  Thus the latest Ansible release receives
     security and general bug fixes when it is first released, security and critical bug fixes when
-    2.5 is released, and **only** security fixes once 2.6 is released.
+    the next Ansible version is released, and **only** security fixes once the follow on to that version is released.
 
 .. Comment: devel used to point here but we're currently revamping our changelog process and have no
    link to a static changelog for devel _2.6: https://github.com/ansible/ansible/blob/devel/CHANGELOG.md
-.. _2.5.0: https://github.com/ansible/ansible/blob/stable-2.5/changelogs/CHANGELOG-v2.5.rst
-.. _2.4.4: https://github.com/ansible/ansible/blob/stable-2.4/CHANGELOG.md
-.. _2.3.3: https://github.com/ansible/ansible/blob/stable-2.3/CHANGELOG.md
-.. _2.2.3: https://github.com/ansible/ansible/blob/stable-2.2/CHANGELOG.md
-.. _2.1.6: https://github.com/ansible/ansible/blob/stable-2.1/CHANGELOG.md
-.. _2.0.2: https://github.com/ansible/ansible/blob/stable-2.0/CHANGELOG.md
-.. _1.9.6: https://github.com/ansible/ansible/blob/stable-1.9/CHANGELOG.md
+.. _2.9 Release Notes:
+.. _2.9: https://github.com/ansible/ansible/blob/stable-2.9/changelogs/CHANGELOG-v2.9.rst
+.. _2.8 Release Notes:
+.. _2.8: https://github.com/ansible/ansible/blob/stable-2.8/changelogs/CHANGELOG-v2.8.rst
+.. _2.7 Release Notes: https://github.com/ansible/ansible/blob/stable-2.7/changelogs/CHANGELOG-v2.7.rst
+.. _2.6 Release Notes:
+.. _2.6: https://github.com/ansible/ansible/blob/stable-2.6/changelogs/CHANGELOG-v2.6.rst
+.. _2.5 Release Notes: https://github.com/ansible/ansible/blob/stable-2.5/changelogs/CHANGELOG-v2.5.rst
 
 .. _support_life:
 .. _methods:
 
-.. _development_and_stable_versiona_maintenance_workflow:
+.. _development_and_stable_version_maintenance_workflow:
 
 Development and stable version maintenance workflow
 ```````````````````````````````````````````````````
@@ -78,28 +75,31 @@ Development and stable version maintenance workflow
 The Ansible community develops and maintains Ansible on GitHub_.
 
 New modules, plugins, features and bugfixes will always be integrated in what will become the next
-major version of Ansible.  This work is tracked on the ``devel`` git branch.
+major version of Ansible. This work is tracked on the ``devel`` git branch.
 
 Ansible provides bugfixes and security improvements for the most recent major release. The previous
 major release will only receive fixes for security issues and critical bugs. Ansible only applies
 security fixes to releases which are two releases old. This work is tracked on the
 ``stable-<version>`` git branches.
 
-.. note:: Support for three major releases began with Ansible-2.4. Ansible-2.3 and older versions
-    are only supported for two releases with the first stage including both security and general bug
-    fixes while the second stage includes security and critical bug fixes
-
-The fixes that land in supported stable branches will eventually be released
+The fixes that land in maintained stable branches will eventually be released
 as a new version when necessary.
 
-For more information on the changes included in each new version, you can refer
-to the changelog_, available on GitHub.
-
-Note that while there are no guarantees for providing fixes for unsupported
+Note that while there are no guarantees for providing fixes for Unmaintained
 releases of Ansible, there can sometimes be exceptions for critical issues.
 
 .. _GitHub: https://github.com/ansible/ansible
-.. _changelog: https://github.com/ansible/ansible/blob/devel/CHANGELOG.md
+
+.. _release_changelogs:
+
+Changelogs
+~~~~~~~~~~
+
+Since Ansible 2.5, we have generated changelogs based on fragments. Here is the generated changelog for 2.9_ as an example. When creating new features or fixing bugs, create a changelog fragment describing the change. A changelog entry is not needed for new modules or plugins. Details for those items will be generated from the module documentation.
+
+We've got :ref:`examples and instructions on creating changelog fragments <changelogs_how_to>` in the Community Guide.
+
+Older versions logged changes in ``stable-<version>`` branches at ``stable-<version>/CHANGELOG.md``. For example, here is the changelog for `2.4 <https://github.com/ansible/ansible/blob/stable-2.4/CHANGELOG.md>`_ on GitHub.
 
 
 Release candidates
@@ -147,7 +147,7 @@ to remove the feature permanently.
 
 The cycle is normally across 4 feature releases (2.x.y, where the x marks a feature release and the y a bugfix release),
 so the feature is normally removed in the 4th release after we announce the deprecation.
-For example, something deprecated in 2.5 will be removed in 2.9, assuming we don't jump to 3.x before that point.
+For example, something deprecated in 2.7 will be removed in 2.11, assuming we don't jump to 3.x before that point.
 The tracking is tied to the number of releases, not the release numbering.
 
 For modules/plugins, we keep the documentation after the removal for users of older versions.
@@ -160,11 +160,9 @@ For modules/plugins, we keep the documentation after the removal for users of ol
        Testing strategies
    :ref:`ansible_community_guide`
        Community information and contributing
-   `Ansible Changelog <https://github.com/ansible/ansible/blob/devel/CHANGELOG.md>`_
-       Documentation of the improvements for each version of Ansible
    `Ansible release tarballs <https://releases.ansible.com/ansible/>`_
        Ansible release tarballs
-   `Development Mailing List <http://groups.google.com/group/ansible-devel>`_
+   `Development Mailing List <https://groups.google.com/group/ansible-devel>`_
        Mailing list for development topics
    `irc.freenode.net <http://irc.freenode.net>`_
        #ansible IRC chat channel

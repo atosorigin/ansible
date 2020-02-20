@@ -20,8 +20,8 @@ from __future__ import (absolute_import, division)
 __metaclass__ = type
 
 # for testing
-from ansible.compat.tests import unittest
-from ansible.compat.tests.mock import Mock, patch
+from units.compat import unittest
+from units.compat.mock import Mock, patch
 
 from ansible.module_utils.facts import collector
 from ansible.module_utils.facts import ansible_collector
@@ -202,17 +202,22 @@ class TestCollectedFacts(unittest.TestCase):
                       'env']
     not_expected_facts = ['facter', 'ohai']
 
+    collected_facts = {}
+
     def _mock_module(self, gather_subset=None):
         return mock_module(gather_subset=self.gather_subset)
 
-    def setUp(self):
+    @patch('platform.system', return_value='Linux')
+    @patch('ansible.module_utils.facts.system.service_mgr.get_file_content', return_value='systemd')
+    def setUp(self, mock_gfc, mock_ps):
         mock_module = self._mock_module()
         collectors = self._collectors(mock_module)
 
         fact_collector = \
             ansible_collector.AnsibleFactCollector(collectors=collectors,
                                                    namespace=ns)
-        self.facts = fact_collector.collect(module=mock_module)
+        self.facts = fact_collector.collect(module=mock_module,
+                                            collected_facts=self.collected_facts)
 
     def _collectors(self, module,
                     all_collector_classes=None,
@@ -319,7 +324,7 @@ class TestCollectorDepsWithFilter(unittest.TestCase):
         expected = {'needed_fact': 'THE_NEEDED_FACT_VALUE',
                     'compound_fact': 'compound-THE_NEEDED_FACT_VALUE'}
 
-        self.assertEquals(expected, facts_dict)
+        self.assertEqual(expected, facts_dict)
 
     def test_with_filter_on_compound_fact(self):
         _mock_module = mock_module(gather_subset=['all', '!facter', '!ohai'],
@@ -329,7 +334,7 @@ class TestCollectorDepsWithFilter(unittest.TestCase):
 
         expected = {'compound_fact': 'compound-THE_NEEDED_FACT_VALUE'}
 
-        self.assertEquals(expected, facts_dict)
+        self.assertEqual(expected, facts_dict)
 
     def test_with_filter_on_needed_fact(self):
         _mock_module = mock_module(gather_subset=['all', '!facter', '!ohai'],
@@ -339,7 +344,7 @@ class TestCollectorDepsWithFilter(unittest.TestCase):
 
         expected = {'needed_fact': 'THE_NEEDED_FACT_VALUE'}
 
-        self.assertEquals(expected, facts_dict)
+        self.assertEqual(expected, facts_dict)
 
     def test_with_filter_on_compound_gather_compound(self):
         _mock_module = mock_module(gather_subset=['!all', '!any', 'compound_fact'],
@@ -349,7 +354,7 @@ class TestCollectorDepsWithFilter(unittest.TestCase):
 
         expected = {'compound_fact': 'compound-THE_NEEDED_FACT_VALUE'}
 
-        self.assertEquals(expected, facts_dict)
+        self.assertEqual(expected, facts_dict)
 
     def test_with_filter_no_match(self):
         _mock_module = mock_module(gather_subset=['all', '!facter', '!ohai'],
@@ -358,7 +363,7 @@ class TestCollectorDepsWithFilter(unittest.TestCase):
         facts_dict = self._collect(_mock_module)
 
         expected = {}
-        self.assertEquals(expected, facts_dict)
+        self.assertEqual(expected, facts_dict)
 
     def test_concat_collector(self):
         _mock_module = mock_module(gather_subset=['all', '!facter', '!ohai'])
@@ -466,10 +471,15 @@ class TestOhaiCollectedFacts(TestCollectedFacts):
 class TestPkgMgrFacts(TestCollectedFacts):
     gather_subset = ['pkg_mgr']
     min_fact_count = 1
-    max_fact_count = 10
+    max_fact_count = 20
     expected_facts = ['gather_subset',
                       'module_setup',
                       'pkg_mgr']
+    collected_facts = {
+        "ansible_distribution": "Fedora",
+        "ansible_distribution_major_version": "28",
+        "ansible_os_family": "RedHat"
+    }
 
 
 class TestOpenBSDPkgMgrFacts(TestPkgMgrFacts):

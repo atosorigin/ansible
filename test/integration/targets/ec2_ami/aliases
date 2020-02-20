@@ -1,2 +1,4 @@
 cloud/aws
-ec2_ami_facts
+shippable/aws/group2
+unstable
+ec2_ami_info

@@ -20,7 +20,6 @@ description:
     - Manage Jenkins jobs by using Jenkins REST API.
 requirements:
   - "python-jenkins >= 0.4.12"
-  - "lxml >= 3.3.3"
 version_added: "2.2"
 author: "Sergio Millan Rodriguez (@sermilrod)"
 options:
@@ -28,14 +27,15 @@ options:
     description:
       - config in XML format.
       - Required if job does not yet exist.
-      - Mututally exclusive with C(enabled).
+      - Mutually exclusive with C(enabled).
       - Considered if C(state=present).
     required: false
   enabled:
     description:
       - Whether the job should be enabled or disabled.
-      - Mututally exclusive with C(config).
+      - Mutually exclusive with C(config).
       - Considered if C(state=present).
+    type: bool
     required: false
   name:
     description:
@@ -57,7 +57,7 @@ options:
     required: false
   url:
     description:
-      - Url where the Jenkins server is accessible.
+      - URL where the Jenkins server is accessible.
     required: false
     default: http://localhost:8080
   user:
@@ -121,12 +121,12 @@ RETURN = '''
 name:
   description: Name of the jenkins job.
   returned: success
-  type: string
+  type: str
   sample: test-job
 state:
   description: State of the jenkins job.
   returned: success
-  type: string
+  type: str
   sample: present
 enabled:
   description: Whether the jenkins job is enabled or not.
@@ -136,30 +136,27 @@ enabled:
 user:
   description: User used for authentication.
   returned: success
-  type: string
+  type: str
   sample: admin
 url:
   description: Url to connect to the Jenkins server.
   returned: success
-  type: string
+  type: str
   sample: https://jenkins.mydomain.com
 '''
 
 import traceback
+import xml.etree.ElementTree as ET
 
+JENKINS_IMP_ERR = None
 try:
     import jenkins
     python_jenkins_installed = True
 except ImportError:
+    JENKINS_IMP_ERR = traceback.format_exc()
     python_jenkins_installed = False
 
-try:
-    from lxml import etree as ET
-    python_lxml_installed = True
-except ImportError:
-    python_lxml_installed = False
-
-from ansible.module_utils.basic import AnsibleModule
+from ansible.module_utils.basic import AnsibleModule, missing_required_lib
 from ansible.module_utils._text import to_native
 
 
@@ -211,7 +208,7 @@ class JenkinsJob:
             if "color" not in response:
                 return self.EXCL_STATE
             else:
-                return response['color'].encode('utf-8')
+                return to_native(response['color'])
 
         except Exception as e:
             self.module.fail_json(msg='Unable to fetch job information, %s' % to_native(e), exception=traceback.format_exc())
@@ -324,16 +321,14 @@ class JenkinsJob:
 
 def test_dependencies(module):
     if not python_jenkins_installed:
-        module.fail_json(msg="python-jenkins required for this module. "
-                         "see http://python-jenkins.readthedocs.io/en/latest/install.html")
-
-    if not python_lxml_installed:
-        module.fail_json(msg="lxml required for this module. "
-                         "see http://lxml.de/installation.html")
+        module.fail_json(
+            msg=missing_required_lib("python-jenkins",
+                                     url="https://python-jenkins.readthedocs.io/en/latest/install.html"),
+            exception=JENKINS_IMP_ERR)
 
 
 def job_config_to_string(xml_str):
-    return ET.tostring(ET.fromstring(xml_str))
+    return ET.tostring(ET.fromstring(xml_str)).decode('ascii')
 
 
 def main():

@@ -29,8 +29,8 @@ import tempfile
 from binascii import hexlify
 import pytest
 
-from ansible.compat.tests import unittest
-from ansible.compat.tests.mock import patch, MagicMock
+from units.compat import unittest
+from units.compat.mock import patch, MagicMock
 
 from ansible import errors
 from ansible.module_utils import six
@@ -46,7 +46,7 @@ class TestUnhexlify(unittest.TestCase):
         b_plain_data = b'some text to hexlify'
         b_data = hexlify(b_plain_data)
         res = vault._unhexlify(b_data)
-        self.assertEquals(res, b_plain_data)
+        self.assertEqual(res, b_plain_data)
 
     def test_odd_length(self):
         b_data = b'123456789abcdefghijklmnopqrstuvwxyz'
@@ -247,7 +247,7 @@ class TestFileVaultSecret(unittest.TestCase):
 
     def test_file_not_found(self):
         tmp_file = tempfile.NamedTemporaryFile()
-        filename = tmp_file.name
+        filename = os.path.realpath(tmp_file.name)
         tmp_file.close()
 
         fake_loader = DictDataLoader({filename: 'sdfadf'})
@@ -390,7 +390,7 @@ class TestGetFileVaultSecret(unittest.TestCase):
 
     def test_file_not_found(self):
         tmp_file = tempfile.NamedTemporaryFile()
-        filename = tmp_file.name
+        filename = os.path.realpath(tmp_file.name)
         tmp_file.close()
 
         fake_loader = DictDataLoader({filename: 'sdfadf'})
@@ -631,12 +631,12 @@ class TestMatchSecrets(unittest.TestCase):
     def test_single_match(self):
         secret = TextVaultSecret('password')
         matches = vault.match_secrets([('default', secret)], ['default'])
-        self.assertEquals(matches, [('default', secret)])
+        self.assertEqual(matches, [('default', secret)])
 
     def test_no_matches(self):
         secret = TextVaultSecret('password')
         matches = vault.match_secrets([('default', secret)], ['not_default'])
-        self.assertEquals(matches, [])
+        self.assertEqual(matches, [])
 
     def test_multiple_matches(self):
         secrets = [('vault_id1', TextVaultSecret('password1')),
@@ -750,20 +750,6 @@ class TestVaultLib(unittest.TestCase):
         self.assertEqual(b_lines[0], b"ansible", msg="Payload was not properly split from the header")
         self.assertEqual(cipher_name, u'TEST', msg="cipher name was not properly set")
         self.assertEqual(b_version, b"9.9", msg="version was not properly set")
-
-    def test_encrypt_decrypt_aes(self):
-        self.v.cipher_name = u'AES'
-        vault_secrets = self._vault_secrets_from_password('default', 'ansible')
-        self.v.secrets = vault_secrets
-        # AES encryption code has been removed, so this is old output for
-        # AES-encrypted 'foobar' with password 'ansible'.
-        b_vaulttext = b'''$ANSIBLE_VAULT;1.1;AES
-53616c7465645f5fc107ce1ef4d7b455e038a13b053225776458052f8f8f332d554809d3f150bfa3
-fe3db930508b65e0ff5947e4386b79af8ab094017629590ef6ba486814cf70f8e4ab0ed0c7d2587e
-786a5a15efeb787e1958cbdd480d076c
-'''
-        b_plaintext = self.v.decrypt(b_vaulttext)
-        self.assertEqual(b_plaintext, b"foobar", msg="decryption failed")
 
     def test_encrypt_decrypt_aes256(self):
         self.v.cipher_name = u'AES256'
@@ -929,13 +915,6 @@ fe3db930508b65e0ff5947e4386b79af8ab094017629590ef6ba486814cf70f8e4ab0ed0c7d2587e
         self.assertEqual('ansible_devel', vault_id)
         self.assertEqual(b'1.2', b_version)
 
-    def test_encrypt_encrypted(self):
-        self.v.cipher_name = u'AES'
-        b_vaulttext = b"$ANSIBLE_VAULT;9.9;TEST\n%s" % hexlify(b"ansible")
-        vaulttext = to_text(b_vaulttext, errors='strict')
-        self.assertRaises(errors.AnsibleError, self.v.encrypt, b_vaulttext)
-        self.assertRaises(errors.AnsibleError, self.v.encrypt, vaulttext)
-
     def test_decrypt_decrypted(self):
         plaintext = u"ansible"
         self.assertRaises(errors.AnsibleError, self.v.decrypt, plaintext)
@@ -946,7 +925,7 @@ fe3db930508b65e0ff5947e4386b79af8ab094017629590ef6ba486814cf70f8e4ab0ed0c7d2587e
     def test_cipher_not_set(self):
         plaintext = u"ansible"
         self.v.encrypt(plaintext)
-        self.assertEquals(self.v.cipher_name, "AES256")
+        self.assertEqual(self.v.cipher_name, "AES256")
 
 
 @pytest.mark.skipif(not vault.HAS_PYCRYPTO,

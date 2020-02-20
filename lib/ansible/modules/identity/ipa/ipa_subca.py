@@ -11,10 +11,10 @@ ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'supported_by': 'community'}
 
 
-DOCUMENTATION = '''
+DOCUMENTATION = r'''
 ---
 module: ipa_subca
-author: Abhijeet Kasurde (@akasurde)
+author: Abhijeet Kasurde (@Akasurde)
 short_description: Manage FreeIPA Lightweight Sub Certificate Authorities.
 description:
 - Add, modify, enable, disable and delete an IPA Lightweight Sub Certificate Authorities using IPA API.
@@ -24,27 +24,31 @@ options:
     description:
     - The Sub Certificate Authority name which needs to be managed.
     required: true
+    aliases: ["name"]
+    type: str
   subca_subject:
     description:
-    - The Sub Certificate Authority's Subject. e.g., 'CN=SampleSubCA1,O=testrelm.test'
+    - The Sub Certificate Authority's Subject. e.g., 'CN=SampleSubCA1,O=testrelm.test'.
     required: true
+    type: str
   subca_desc:
     description:
     - The Sub Certificate Authority's description.
-    required: true
+    type: str
   state:
     description:
-    - State to ensure
-    - State 'disable' and 'enable' is available for FreeIPA 4.4.2 version and onwards
+    - State to ensure.
+    - State 'disable' and 'enable' is available for FreeIPA 4.4.2 version and onwards.
     required: false
     default: present
-    choices: ["present", "absent", "enable", "disable"]
+    choices: ["absent", "disabled", "enabled", "present"]
+    type: str
 extends_documentation_fragment: ipa.documentation
 '''
 
 EXAMPLES = '''
-# Ensure IPA Sub CA is present
-- ipa_subca:
+- name: Ensure IPA Sub CA is present
+  ipa_subca:
     ipa_host: spider.example.com
     ipa_pass: Passw0rd!
     state: present
@@ -52,22 +56,22 @@ EXAMPLES = '''
     subca_subject: 'CN=AnsibleSubCA1,O=example.com'
     subca_desc: Ansible Sub CA
 
-# Ensure that IPA Sub CA is removed
-- ipa_subca:
+- name: Ensure that IPA Sub CA is removed
+  ipa_subca:
     ipa_host: spider.example.com
     ipa_pass: Passw0rd!
     state: absent
     subca_name: AnsibleSubCA1
 
-# Ensure that IPA Sub CA is disabled
-- ipa_subca:
+- name: Ensure that IPA Sub CA is disabled
+  ipa_subca:
     ipa_host: spider.example.com
     ipa_pass: Passw0rd!
     state: disable
     subca_name: AnsibleSubCA1
 '''
 
-RETURN = '''
+RETURN = r'''
 subca:
   description: IPA Sub CA record as returned by IPA API.
   returned: always

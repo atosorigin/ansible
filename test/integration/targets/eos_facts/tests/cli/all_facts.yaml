@@ -1,16 +1,13 @@
 ---
 - debug: msg="START cli/all_facts.yaml on connection={{ ansible_connection }}"
 
-
 - name: test getting all facts
   eos_facts:
-    provider: "{{ cli }}"
     gather_subset:
       - all
+    provider: "{{ cli }}"
   become: yes
   register: result
-
-
 
 - assert:
     that:

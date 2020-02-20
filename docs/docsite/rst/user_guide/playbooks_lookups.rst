@@ -1,3 +1,5 @@
+.. _playbooks_lookups:
+
 Lookups
 -------
 
@@ -5,7 +7,7 @@ Lookup plugins allow access to outside data sources. Like all templating, these 
 
 .. note::
     - Lookups occur on the local computer, not on the remote computer.
-    - They are executed with in the directory containing the role or play, as opposed to local tasks which are executed with the directory of the executed script.
+    - They are executed within the directory containing the role or play, as opposed to local tasks which are executed with the directory of the executed script.
     - You can pass wantlist=True to lookups to use in jinja2 template "for" loops.
     - Lookups are an advanced feature. You should have a good working knowledge of Ansible plays before incorporating them.
 
@@ -20,7 +22,7 @@ Lookups and loops
 
 *lookup plugins* are a way to query external data sources, such as shell commands or even key value stores.
 
-Before Ansible 2.5, lookups were mostly used indirectly in ``with_<lookup`` constructs for looping. Starting with Ansible version 2.5, lookups are used more explicitly as part of Jinja2 expressions fed into the ``loop`` keyword.
+Before Ansible 2.5, lookups were mostly used indirectly in ``with_<lookup>`` constructs for looping. Starting with Ansible version 2.5, lookups are used more explicitly as part of Jinja2 expressions fed into the ``loop`` keyword.
 
 
 .. _lookups_and_variables:
@@ -48,7 +50,7 @@ For more details and a complete list of lookup plugins available, please see :re
        All about variables
    :ref:`playbooks_loops`
        Looping in playbooks
-   `User Mailing List <http://groups.google.com/group/ansible-devel>`_
+   `User Mailing List <https://groups.google.com/group/ansible-devel>`_
        Have a question?  Stop by the google group!
    `irc.freenode.net <http://irc.freenode.net>`_
        #ansible IRC chat channel

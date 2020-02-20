@@ -22,11 +22,12 @@
 #   - cloudfront_distribution
 #   - cloudfront_invalidation
 #   - cloudfront_origin_access_identity
-
-
 """
 Common cloudfront facts shared between modules
 """
+
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
 
 from ansible.module_utils.ec2 import get_aws_connection_info, boto3_conn
 from ansible.module_utils.ec2 import boto3_tag_list_to_ansible_dict, camel_dict_to_snake_dict
@@ -93,7 +94,7 @@ class CloudFrontFactsServiceManager(object):
     def list_origin_access_identities(self):
         try:
             paginator = self.client.get_paginator('list_cloud_front_origin_access_identities')
-            result = paginator.paginate().build_full_result()['CloudFrontOriginAccessIdentityList']
+            result = paginator.paginate().build_full_result().get('CloudFrontOriginAccessIdentityList', {})
             return result.get('Items', [])
         except botocore.exceptions.ClientError as e:
             self.module.fail_json_aws(e, msg="Error listing cloud front origin access identities")

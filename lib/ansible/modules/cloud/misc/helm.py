@@ -16,28 +16,28 @@ DOCUMENTATION = '''
 module: helm
 short_description: Manages Kubernetes packages with the Helm package manager
 version_added: "2.4"
-author: "Flavio Percoco (flaper87)"
+author: "Flavio Percoco (@flaper87)"
 description:
-   - Install, upgrade, delete and list packages with the Helm package manage
+   - Install, upgrade, delete and list packages with the Helm package manager.
 requirements:
   - "pyhelm"
   - "grpcio"
 options:
   host:
     description:
-      - Tiller's server host
+      - Tiller's server host.
     default: "localhost"
   port:
     description:
-      - Tiller's server port
+      - Tiller's server port.
     default: 44134
   namespace:
     description:
-      - Kubernetes namespace where the chart should be installed
+      - Kubernetes namespace where the chart should be installed.
     default: "default"
   name:
     description:
-      - Release name to manage
+      - Release name to manage.
   state:
     description:
       - Whether to install C(present), remove C(absent), or purge C(purged) a package.
@@ -45,13 +45,7 @@ options:
     default: "present"
   chart:
     description: |
-      A map describing the chart to install. For example:
-      chart:
-        name: memcached
-        version: 0.4.0
-        source:
-          type: repo
-          location: https://kubernetes-charts.storage.googleapis.com
+      A map describing the chart to install. See examples for available options.
     default: {}
   values:
     description:
@@ -59,7 +53,7 @@ options:
     default: {}
   disable_hooks:
     description:
-      - Whether to disable hooks during the uninstall process
+      - Whether to disable hooks during the uninstall process.
     type: bool
     default: 'no'
 '''
@@ -85,17 +79,44 @@ EXAMPLES = '''
     host: localhost
     state: absent
     name: my-memcached
+
+- name: Install helm chart from a git repo
+  helm:
+    host: localhost
+    chart:
+      source:
+        type: git
+        location: https://github.com/user/helm-chart.git
+    state: present
+    name: my-example
+    namespace: default
+    values:
+      foo: "bar"
+
+- name: Install helm chart from a git repo specifying path
+  helm:
+    host: localhost
+    chart:
+      source:
+        type: git
+        location: https://github.com/helm/charts.git
+        path: stable/memcached
+    state: present
+    name: my-memcached
+    namespace: default
+    values: "{{ lookup('file', '/path/to/file/values.yaml') | from_yaml }}"
 '''
 
+import traceback
+HELM_IMPORT_ERR = None
 try:
     import grpc
     from pyhelm import tiller
     from pyhelm import chartbuilder
-    HAS_PYHELM = True
-except ImportError as exc:
-    HAS_PYHELM = False
+except ImportError:
+    HELM_IMPORT_ERR = traceback.format_exc()
 
-from ansible.module_utils.basic import AnsibleModule
+from ansible.module_utils.basic import AnsibleModule, missing_required_lib
 
 
 def install(module, tserver):
@@ -165,9 +186,8 @@ def main():
         ),
         supports_check_mode=True)
 
-    if not HAS_PYHELM:
-        module.fail_json(msg="Could not import the pyhelm python module. "
-                         "Please install `pyhelm` package.")
+    if HELM_IMPORT_ERR:
+        module.fail_json(msg=missing_required_lib('pyhelm'), exception=HELM_IMPORT_ERR)
 
     host = module.params['host']
     port = module.params['port']

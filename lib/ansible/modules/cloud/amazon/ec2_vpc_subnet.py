@@ -16,35 +16,44 @@ DOCUMENTATION = '''
 module: ec2_vpc_subnet
 short_description: Manage subnets in AWS virtual private clouds
 description:
-    - Manage subnets in AWS virtual private clouds
+    - Manage subnets in AWS virtual private clouds.
 version_added: "2.0"
-author: Robert Estelle (@erydo), Brad Davidson (@brandond)
+author:
+- Robert Estelle (@erydo)
+- Brad Davidson (@brandond)
 requirements: [ boto3 ]
 options:
   az:
     description:
       - "The availability zone for the subnet."
+    type: str
   cidr:
     description:
       - "The CIDR block for the subnet. E.g. 192.0.2.0/24."
+    type: str
+    required: true
   ipv6_cidr:
     description:
       - "The IPv6 CIDR block for the subnet. The VPC must have a /56 block assigned and this value must be a valid IPv6 /64 that falls in the VPC range."
       - "Required if I(assign_instances_ipv6=true)"
     version_added: "2.5"
+    type: str
   tags:
     description:
       - "A dict of tags to apply to the subnet. Any tags currently applied to the subnet and not present here will be removed."
     aliases: [ 'resource_tags' ]
+    type: dict
   state:
     description:
-      - "Create or remove the subnet"
+      - "Create or remove the subnet."
     default: present
     choices: [ 'present', 'absent' ]
+    type: str
   vpc_id:
     description:
       - "VPC ID of the VPC in which to create or delete the subnet."
     required: true
+    type: str
   map_public:
     description:
       - "Specify C(yes) to indicate that instances launched into the subnet should be assigned public IP address by default."
@@ -55,24 +64,25 @@ options:
     description:
       - "Specify C(yes) to indicate that instances launched into the subnet should be automatically assigned an IPv6 address."
     type: bool
-    default: 'no'
+    default: false
     version_added: "2.5"
   wait:
     description:
-      - "When specified,I(state=present) module will wait for subnet to be in available state before continuing."
+      - "When I(wait=true) and I(state=present), module will wait for subnet to be in available state before continuing."
     type: bool
-    default: 'yes'
+    default: true
     version_added: "2.5"
   wait_timeout:
     description:
       - "Number of seconds to wait for subnet to become available I(wait=True)."
     default: 300
     version_added: "2.5"
+    type: int
   purge_tags:
     description:
       - Whether or not to remove tags that do not appear in the I(tags) list.
     type: bool
-    default: 'yes'
+    default: true
     version_added: "2.5"
 extends_documentation_fragment:
     - aws
@@ -87,7 +97,7 @@ EXAMPLES = '''
     state: present
     vpc_id: vpc-123456
     cidr: 10.0.1.16/28
-    resource_tags:
+    tags:
       Name: Database Subnet
   register: database_subnet
 
@@ -121,27 +131,27 @@ subnet:
         id:
             description: Subnet resource id
             returned: I(state=present)
-            type: string
+            type: str
             sample: subnet-b883b2c4
         cidr_block:
             description: The IPv4 CIDR of the Subnet
             returned: I(state=present)
-            type: string
+            type: str
             sample: "10.0.0.0/16"
         ipv6_cidr_block:
             description: The IPv6 CIDR block actively associated with the Subnet
             returned: I(state=present)
-            type: string
+            type: str
             sample: "2001:db8:0:102::/64"
         availability_zone:
             description: Availability zone of the Subnet
             returned: I(state=present)
-            type: string
+            type: str
             sample: us-east-1a
         state:
             description: state of the Subnet
             returned: I(state=present)
-            type: string
+            type: str
             sample: available
         tags:
             description: tags attached to the Subnet, includes name
@@ -151,32 +161,32 @@ subnet:
         map_public_ip_on_launch:
             description: whether public IP is auto-assigned to new instances
             returned: I(state=present)
-            type: boolean
+            type: bool
             sample: false
         assign_ipv6_address_on_creation:
             description: whether IPv6 address is auto-assigned to new instances
             returned: I(state=present)
-            type: boolean
+            type: bool
             sample: false
         vpc_id:
             description: the id of the VPC where this Subnet exists
             returned: I(state=present)
-            type: string
+            type: str
             sample: vpc-67236184
         available_ip_address_count:
             description: number of available IPv4 addresses
             returned: I(state=present)
-            type: string
+            type: str
             sample: 251
         default_for_az:
             description: indicates whether this is the default Subnet for this Availability Zone
             returned: I(state=present)
-            type: boolean
+            type: bool
             sample: false
         ipv6_association_id:
             description: The IPv6 association ID for the currently associated CIDR
             returned: I(state=present)
-            type: string
+            type: str
             sample: subnet-cidr-assoc-b85c74d2
         ipv6_cidr_block_association_set:
             description: An array of IPv6 cidr block association set information.
@@ -186,11 +196,11 @@ subnet:
                 association_id:
                     description: The association ID
                     returned: always
-                    type: string
+                    type: str
                 ipv6_cidr_block:
                     description: The IPv6 CIDR block that is associated with the subnet.
                     returned: always
-                    type: string
+                    type: str
                 ipv6_cidr_block_state:
                     description: A hash/dict that contains a single item. The state of the cidr block association.
                     returned: always
@@ -199,12 +209,11 @@ subnet:
                         state:
                             description: The CIDR block association state.
                             returned: always
-                            type: string
+                            type: str
 '''
 
 
 import time
-import traceback
 
 try:
     import botocore
@@ -215,8 +224,7 @@ from ansible.module_utils._text import to_text
 from ansible.module_utils.aws.core import AnsibleAWSModule
 from ansible.module_utils.aws.waiters import get_waiter
 from ansible.module_utils.ec2 import (ansible_dict_to_boto3_filter_list, ansible_dict_to_boto3_tag_list,
-                                      ec2_argument_spec, camel_dict_to_snake_dict, get_aws_connection_info,
-                                      boto3_conn, boto3_tag_list_to_ansible_dict, compare_aws_tags, AWSRetry)
+                                      camel_dict_to_snake_dict, boto3_tag_list_to_ansible_dict, compare_aws_tags, AWSRetry)
 
 
 def get_subnet_info(subnet):
@@ -253,16 +261,17 @@ def describe_subnets_with_backoff(client, **params):
     return client.describe_subnets(**params)
 
 
-def wait_config(wait_timeout, start_time):
-    remaining_wait_timeout = int(wait_timeout + start_time - time.time())
-    return {'Delay': 5, 'MaxAttempts': remaining_wait_timeout // 5}
+def waiter_params(module, params, start_time):
+    if not module.botocore_at_least("1.7.0"):
+        remaining_wait_timeout = int(module.params['wait_timeout'] + start_time - time.time())
+        params['WaiterConfig'] = {'Delay': 5, 'MaxAttempts': remaining_wait_timeout // 5}
+    return params
 
 
 def handle_waiter(conn, module, waiter_name, params, start_time):
-    params['WaiterConfig'] = wait_config(module.params['wait_timeout'], start_time)
     try:
         get_waiter(conn, waiter_name).wait(
-            **params
+            **waiter_params(module, params, start_time)
         )
     except botocore.exceptions.WaiterError as e:
         module.fail_json_aws(e, "Failed to wait for updates to complete")
@@ -295,8 +304,7 @@ def create_subnet(conn, module, vpc_id, cidr, ipv6_cidr=None, az=None, start_tim
         handle_waiter(conn, module, 'subnet_exists', {'SubnetIds': [subnet['id']]}, start_time)
         try:
             conn.get_waiter('subnet_available').wait(
-                SubnetIds=[subnet['id']],
-                WaiterConfig=wait_config(wait_timeout, start_time)
+                **waiter_params(module, {'SubnetIds': [subnet['id']]}, start_time)
             )
             subnet['state'] = 'available'
         except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
@@ -508,7 +516,7 @@ def ensure_subnet_present(conn, module):
 
 
 def ensure_final_subnet(conn, module, subnet, start_time):
-    for rewait in range(0, 10):
+    for rewait in range(0, 30):
         map_public_correct = False
         assign_ipv6_correct = False
 
@@ -531,7 +539,7 @@ def ensure_final_subnet(conn, module, subnet, start_time):
         if map_public_correct and assign_ipv6_correct:
             break
 
-        time.sleep(3)
+        time.sleep(5)
         subnet = get_matching_subnet(conn, module, module.params['vpc_id'], module.params['cidr'])
 
     return subnet
@@ -553,21 +561,18 @@ def ensure_subnet_absent(conn, module):
 
 
 def main():
-    argument_spec = ec2_argument_spec()
-    argument_spec.update(
-        dict(
-            az=dict(default=None, required=False),
-            cidr=dict(default=None, required=True),
-            ipv6_cidr=dict(default='', required=False),
-            state=dict(default='present', choices=['present', 'absent']),
-            tags=dict(default={}, required=False, type='dict', aliases=['resource_tags']),
-            vpc_id=dict(default=None, required=True),
-            map_public=dict(default=False, required=False, type='bool'),
-            assign_instances_ipv6=dict(default=False, required=False, type='bool'),
-            wait=dict(type='bool', default=True),
-            wait_timeout=dict(type='int', default=300, required=False),
-            purge_tags=dict(default=True, type='bool')
-        )
+    argument_spec = dict(
+        az=dict(default=None, required=False),
+        cidr=dict(required=True),
+        ipv6_cidr=dict(default='', required=False),
+        state=dict(default='present', choices=['present', 'absent']),
+        tags=dict(default={}, required=False, type='dict', aliases=['resource_tags']),
+        vpc_id=dict(required=True),
+        map_public=dict(default=False, required=False, type='bool'),
+        assign_instances_ipv6=dict(default=False, required=False, type='bool'),
+        wait=dict(type='bool', default=True),
+        wait_timeout=dict(type='int', default=300, required=False),
+        purge_tags=dict(default=True, type='bool')
     )
 
     required_if = [('assign_instances_ipv6', True, ['ipv6_cidr'])]
@@ -577,8 +582,10 @@ def main():
     if module.params.get('assign_instances_ipv6') and not module.params.get('ipv6_cidr'):
         module.fail_json(msg="assign_instances_ipv6 is True but ipv6_cidr is None or an empty string")
 
-    region, ec2_url, aws_connect_params = get_aws_connection_info(module, boto3=True)
-    connection = boto3_conn(module, conn_type='client', resource='ec2', region=region, endpoint=ec2_url, **aws_connect_params)
+    if not module.botocore_at_least("1.7.0"):
+        module.warn("botocore >= 1.7.0 is required to use wait_timeout for custom wait times")
+
+    connection = module.client('ec2')
 
     state = module.params.get('state')
 

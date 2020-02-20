@@ -1,2 +1,4 @@
-posix/ci/group2
+shippable/posix/group4
 destructive
+skip/aix
+skip/rhel

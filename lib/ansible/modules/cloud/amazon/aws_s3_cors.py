@@ -2,6 +2,10 @@
 # Copyright (c) 2017 Ansible Project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 #
+
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
+
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
                     'supported_by': 'community'}
@@ -19,14 +23,17 @@ options:
     description:
       - Name of the s3 bucket
     required: true
+    type: str
   rules:
     description:
       - Cors rules to put on the s3 bucket
+    type: list
   state:
     description:
       - Create or remove cors on the s3 bucket
     required: true
     choices: [ 'present', 'absent' ]
+    type: str
 extends_documentation_fragment:
     - aws
     - ec2
@@ -62,12 +69,12 @@ RETURN = '''
 changed:
   description: check to see if a change was made to the rules
   returned: always
-  type: boolean
+  type: bool
   sample: true
 name:
   description: name of bucket
   returned: always
-  type: string
+  type: str
   sample: 'bucket-name'
 rules:
   description: list of current rules
@@ -91,7 +98,7 @@ rules:
 
 try:
     from botocore.exceptions import ClientError, BotoCoreError
-except:
+except Exception:
     # handled by HAS_BOTO3 check in main
     pass
 
@@ -186,6 +193,7 @@ def main():
         create_or_update_bucket_cors(client, module)
     elif state == 'absent':
         destroy_bucket_cors(client, module)
+
 
 if __name__ == '__main__':
     main()

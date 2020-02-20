@@ -17,7 +17,7 @@ For more details, see [Lenovo modules for Ansible: cnos_image](http://systemx.le
 ---
 <add role requirements information below>
 
-- Ansible version 2.2 or later ([Ansible installation documentation](http://docs.ansible.com/ansible/intro_installation.html))
+- Ansible version 2.2 or later ([Ansible installation documentation](https://docs.ansible.com/ansible/intro_installation.html))
 - Lenovo switches running CNOS version 10.2.1.0 or later
 - an SSH connection to the Lenovo switch (SSH must be enabled on the network device)
 
@@ -91,7 +91,7 @@ To execute an Ansible playbook, use the following command:
 ansible-playbook cnos_image_sample.yml -vvv
 ```
 
-`-vvv` is an optional verbos command that helps identify what is happening during playbook execution. The playbook for each role is located in the main directory of the solution.
+`-vvv` is an optional verbose command that helps identify what is happening during playbook execution. The playbook for each role is located in the main directory of the solution.
 
 ```
   - name: Module to  do image download

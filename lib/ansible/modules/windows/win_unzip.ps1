@@ -1,23 +1,9 @@
 #!powershell
-# This file is part of Ansible
-#
-# Copyright 2015, Phil Schwartz <schwartzmx@gmail.com>
-#
-# Ansible is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# Ansible is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 
-# WANT_JSON
-# POWERSHELL_COMMON
+# Copyright: (c) 2015, Phil Schwartz <schwartzmx@gmail.com>
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
+#Requires -Module Ansible.ModuleUtils.Legacy
 
 # TODO: This module is not idempotent (it will always unzip and report change)
 
@@ -54,7 +40,7 @@ Function Extract-Zip($src, $dest) {
         $entry_target_path = [System.IO.Path]::Combine($dest, $archive_name)
         $entry_dir = [System.IO.Path]::GetDirectoryName($entry_target_path)
 
-        if (-not (Test-Path -Path $entry_dir)) {
+        if (-not (Test-Path -LiteralPath $entry_dir)) {
             New-Item -Path $entry_dir -ItemType Directory -WhatIf:$check_mode | Out-Null
             $result.changed = $true
         }
@@ -101,7 +87,7 @@ $ext = [System.IO.Path]::GetExtension($src)
 
 If (-Not (Test-Path -LiteralPath $dest -PathType Container)){
     Try{
-        New-Item -ItemType "directory" -path $dest -WhatIf:$check_mode
+        New-Item -ItemType "directory" -path $dest -WhatIf:$check_mode | out-null
     } Catch {
         Fail-Json -obj $result -message "Error creating '$dest' directory! Msg: $($_.Exception.Message)"
     }
@@ -156,14 +142,14 @@ If ($ext -eq ".zip" -And $recurse -eq $false) {
     }
 
     If ($recurse) {
-        Get-ChildItem $dest -recurse | Where {$pcx_extensions -contains $_.extension} | % {
+        Get-ChildItem -LiteralPath $dest -recurse | Where-Object {$pcx_extensions -contains $_.extension} | ForEach-Object {
             Try {
                 Expand-Archive $_.FullName -OutputPath $dest -Force -WhatIf:$check_mode
             } Catch {
                 Fail-Json -obj $result -message "Error recursively expanding '$src' to '$dest'! Msg: $($_.Exception.Message)"
             }
             If ($delete_archive) {
-                Remove-Item $_.FullName -Force -WhatIf:$check_mode
+                Remove-Item -LiteralPath $_.FullName -Force -WhatIf:$check_mode
                 $result.removed = $true
             }
         }
@@ -174,11 +160,10 @@ If ($ext -eq ".zip" -And $recurse -eq $false) {
 
 If ($delete_archive){
     try {
-        Remove-Item $src -Recurse -Force -WhatIf:$check_mode
+        Remove-Item -LiteralPath $src -Recurse -Force -WhatIf:$check_mode
     } catch {
         Fail-Json -obj $result -message "failed to delete archive at '$src': $($_.Exception.Message)"
     }
     $result.removed = $true
 }
-
 Exit-Json $result

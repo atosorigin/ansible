@@ -1,7 +1,5 @@
 ---
 - debug: msg="START connection={{ ansible_connection }} nxos_udld sanity test"
-- debug: msg="Using provider={{ connection.transport }}"
-  when: ansible_connection == "local"
 
 - set_fact: udld_run="true"
 - set_fact: udld_run="false"
@@ -14,13 +12,11 @@
     nxos_feature: 
       feature: udld
       state: enabled
-      provider: "{{ connection }}"
 
   - name: Configure udld
     nxos_udld: &conf1
       aggressive: enabled
       msg_time: 20
-      provider: "{{ connection }}"
     register: result
 
   - assert: &true
@@ -38,12 +34,10 @@
   - name: Reset udld
     nxos_udld:
       reset: True
-      provider: "{{ connection }}"
 
   - name: Configure udld2
     nxos_udld: &conf2
       aggressive: disabled
-      provider: "{{ connection }}"
     register: result
 
   - assert: *true
@@ -57,7 +51,6 @@
   - name: Configure udld3
     nxos_udld: &conf3
       msg_time: default
-      provider: "{{ connection }}"
     register: result
 
   - assert: *true
@@ -77,7 +70,6 @@
   - name: Remove udld config
     nxos_udld: &conf4
       state: absent
-      provider: "{{ connection }}"
     register: result
 
   - assert: *true
@@ -95,7 +87,6 @@
     nxos_feature: 
       feature: udld
       state: disabled
-      provider: "{{ connection }}"
     ignore_errors: yes
 
 - debug: msg="END connection={{ ansible_connection }} nxos_udld sanity test"
