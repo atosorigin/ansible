@@ -40,7 +40,6 @@
       - "testing == 123"
       - "base_dir == 'all'"
 
-<<<<<<< HEAD
 - name: include defaults.yml again without overwriting existing variables
   include_vars:
     file: defaults/all.yml
@@ -52,7 +51,7 @@
       - "testing == 123"
       - "base_dir == 'all'"
       - "default_testing == 966"
-=======
+
 - name: include var files with extension only
   include_vars:
     dir: webapp
@@ -65,7 +64,6 @@
     that:
       - webapp_version is defined
       - "'file_without_extension' in '{{ include_without_file_extension.ansible_included_var_files | join(' ') }}'"
->>>>>>> 23995fef48568412e91739a58f12e4a6b309bd54
 
 - name: include every directory in vars
   include_vars:
