@@ -77,17 +77,11 @@
       - "testing == 456"
       - "base_dir == 'services'"
       - "webapp_containers == 10"
-      - "{{ include_every_dir.ansible_included_var_files | length }} == 5"
+      - "{{ include_every_dir.ansible_included_var_files | length }} == 7"
       - "'vars/all/all.yml' in include_every_dir.ansible_included_var_files[0]"
       - "'vars/environments/development/all.yml' in include_every_dir.ansible_included_var_files[2]"
       - "'vars/environments/development/services/webapp.yml' in include_every_dir.ansible_included_var_files[3]"
-      - "'vars/services/webapp.yml' in include_every_dir.ansible_included_var_files[4]"
-      - "{{ include_every_dir.ansible_included_var_files | length }} == 6"
-      - "'vars/all/all.yml' in include_every_dir.ansible_included_var_files[0]"
-      - "'vars/environments/development/all.yml' in include_every_dir.ansible_included_var_files[1]"
-      - "'vars/environments/development/services/webapp.yml' in include_every_dir.ansible_included_var_files[2]"
-      - "'vars/services/webapp.yml' in include_every_dir.ansible_included_var_files[4]"
-      - "'vars/webapp/file_without_extension' in include_every_dir.ansible_included_var_files[5]"
+      - "'vars/services/webapp.yml' in include_every_dir.ansible_included_var_files[5]"
 
 - name: include every directory in vars except files matching webapp.yml
   include_vars:
@@ -102,7 +96,7 @@
     that:
       - "testing == 789"
       - "base_dir == 'environments/development'"
-      - "{{ include_without_webapp.ansible_included_var_files | length }} == 3"
+      - "{{ include_without_webapp.ansible_included_var_files | length }} == 4"
       - "'webapp.yml' not in '{{ include_without_webapp.ansible_included_var_files | join(' ') }}'"
       - "'file_without_extension' not in '{{ include_without_webapp.ansible_included_var_files | join(' ') }}'"
 
