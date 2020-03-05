@@ -68,7 +68,13 @@ options:
         on personally controlled sites using self-signed certificates.
     required: false
     default: 'yes'
-    choices: ['yes', 'no']
+    type: bool
+  deployment_message:
+    description:
+    - Message about the deployment.
+    - C(message) alias is deprecated in Ansible 2.10, since it is used internally by Ansible Core Engine.
+    aliases: ['message']
+    version_added: "2.10"
 
 # informational: requirements for nodes
 requirements: [ ]
@@ -129,7 +135,7 @@ def main():
             env=dict(required=False),
             owner=dict(required=False),
             description=dict(required=False),
-            message=dict(required=False),
+            deployment_message=dict(required=False, aliases=['message'], deprecated_aliases=[dict(name='message', version='2.14')]),
             source_system=dict(required=False, default='ansible'),
             validate_certs=dict(default='yes', type='bool'),
             url=dict(required=False, default='https://api.bigpanda.io'),

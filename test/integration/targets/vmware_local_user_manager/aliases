@@ -1,3 +1,4 @@
-posix/ci/cloud/group1/vcenter
 cloud/vcenter
-destructive
+shippable/vcenter/group2
+needs/target/prepare_vmware_tests
+zuul/vmware/vcenter_only

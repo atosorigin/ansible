@@ -19,34 +19,78 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
-import sys
 import copy
+import re
+import sys
 
 from ansible import constants as C
-from ansible.module_utils._text import to_text
+from ansible.plugins.action.network import ActionModule as ActionNetworkModule
 from ansible.module_utils.connection import Connection
-from ansible.plugins.action.normal import ActionModule as _ActionModule
 from ansible.module_utils.network.common.utils import load_provider
 from ansible.module_utils.network.nxos.nxos import nxos_provider_spec
+from ansible.utils.display import Display
 
-try:
-    from __main__ import display
-except ImportError:
-    from ansible.utils.display import Display
-    display = Display()
+display = Display()
 
 
-class ActionModule(_ActionModule):
+class ActionModule(ActionNetworkModule):
 
     def run(self, tmp=None, task_vars=None):
         del tmp  # tmp no longer has any effect
 
-        socket_path = None
+        module_name = self._task.action.split('.')[-1]
+        self._config_module = True if module_name == 'nxos_config' else False
+        persistent_connection = self._play_context.connection.split('.')[-1]
+        warnings = []
 
-        if self._play_context.connection == 'network_cli':
+        if (self._play_context.connection in ('httpapi', 'local') or self._task.args.get('provider', {}).get('transport') == 'nxapi') \
+                and module_name in ('nxos_file_copy', 'nxos_nxapi'):
+            return {'failed': True, 'msg': "Transport type 'nxapi' is not valid for '%s' module." % (module_name)}
+
+        if module_name == 'nxos_file_copy':
+            self._task.args['host'] = self._play_context.remote_addr
+            self._task.args['password'] = self._play_context.password
+            if self._play_context.connection == 'network_cli':
+                self._task.args['username'] = self._play_context.remote_user
+            elif self._play_context.connection == 'local':
+                self._task.args['username'] = self._play_context.connection_user
+
+        if module_name == 'nxos_install_os':
+            connection = self._connection
+            if connection.transport == 'local':
+                persistent_command_timeout = C.PERSISTENT_COMMAND_TIMEOUT
+                persistent_connect_timeout = C.PERSISTENT_CONNECT_TIMEOUT
+            else:
+                persistent_command_timeout = connection.get_option('persistent_command_timeout')
+                persistent_connect_timeout = connection.get_option('persistent_connect_timeout')
+
+            display.vvvv('PERSISTENT_COMMAND_TIMEOUT is %s' % str(persistent_command_timeout), self._play_context.remote_addr)
+            display.vvvv('PERSISTENT_CONNECT_TIMEOUT is %s' % str(persistent_connect_timeout), self._play_context.remote_addr)
+            if persistent_command_timeout < 600 or persistent_connect_timeout < 600:
+                msg = 'PERSISTENT_COMMAND_TIMEOUT and PERSISTENT_CONNECT_TIMEOUT'
+                msg += ' must be set to 600 seconds or higher when using nxos_install_os module.'
+                msg += ' Current persistent_command_timeout setting:' + str(persistent_command_timeout)
+                msg += ' Current persistent_connect_timeout setting:' + str(persistent_connect_timeout)
+                return {'failed': True, 'msg': msg}
+
+        if persistent_connection in ('network_cli', 'httpapi'):
             provider = self._task.args.get('provider', {})
             if any(provider.values()):
-                display.warning('provider is unnecessary when using network_cli and will be ignored')
+                display.warning('provider is unnecessary when using %s and will be ignored' % self._play_context.connection)
+                del self._task.args['provider']
+            if self._task.args.get('transport'):
+                display.warning('transport is unnecessary when using %s and will be ignored' % self._play_context.connection)
+                del self._task.args['transport']
+
+            if module_name == 'nxos_gir':
+                conn = Connection(self._connection.socket_path)
+                persistent_command_timeout = conn.get_option('persistent_command_timeout')
+                gir_timeout = 200
+                if persistent_command_timeout < gir_timeout:
+                    conn.set_option('persistent_command_timeout', gir_timeout)
+                    msg = "timeout value extended to %ss for nxos_gir" % gir_timeout
+                    display.warning(msg)
+
         elif self._play_context.connection == 'local':
             provider = load_provider(nxos_provider_spec, self._task.args)
             transport = provider['transport'] or 'cli'
@@ -55,17 +99,31 @@ class ActionModule(_ActionModule):
 
             if transport == 'cli':
                 pc = copy.deepcopy(self._play_context)
-                pc.connection = 'network_cli'
-                pc.network_os = 'nxos'
+                pc.connection = 'ansible.netcommon.network_cli'
+                pc.network_os = 'cisco.nxos.nxos'
                 pc.remote_addr = provider['host'] or self._play_context.remote_addr
                 pc.port = int(provider['port'] or self._play_context.port or 22)
                 pc.remote_user = provider['username'] or self._play_context.connection_user
                 pc.password = provider['password'] or self._play_context.password
                 pc.private_key_file = provider['ssh_keyfile'] or self._play_context.private_key_file
-                pc.timeout = int(provider['timeout'] or C.PERSISTENT_COMMAND_TIMEOUT)
+                pc.become = provider['authorize'] or False
+                if pc.become:
+                    pc.become_method = 'enable'
+                pc.become_pass = provider['auth_pass']
+
+                connection = self._shared_loader_obj.connection_loader.get('ansible.netcommon.persistent', pc, sys.stdin,
+                                                                           task_uuid=self._task._uuid)
+
+                # TODO: Remove below code after ansible minimal is cut out
+                if connection is None:
+                    pc.connection = 'network_cli'
+                    pc.network_os = 'nxos'
+                    connection = self._shared_loader_obj.connection_loader.get('persistent', pc, sys.stdin, task_uuid=self._task._uuid)
 
                 display.vvv('using connection plugin %s (was local)' % pc.connection, pc.remote_addr)
-                connection = self._shared_loader_obj.connection_loader.get('persistent', pc, sys.stdin)
+
+                command_timeout = int(provider['timeout']) if provider['timeout'] else connection.get_option('persistent_command_timeout')
+                connection.set_options(direct={'persistent_command_timeout': command_timeout})
 
                 socket_path = connection.run()
                 display.vvvv('socket_path: %s' % socket_path, pc.remote_addr)
@@ -78,23 +136,17 @@ class ActionModule(_ActionModule):
 
             else:
                 self._task.args['provider'] = ActionModule.nxapi_implementation(provider, self._play_context)
+                warnings.append(['connection local support for this module is deprecated and will be removed in version 2.14,'
+                                 ' use connection either httpapi or ansible.netcommon.httpapi (whichever is applicable)'])
         else:
             return {'failed': True, 'msg': 'Connection type %s is not valid for this module' % self._play_context.connection}
 
-        if (self._play_context.connection == 'local' and transport == 'cli') or self._play_context.connection == 'network_cli':
-            # make sure we are in the right cli context which should be
-            # enable mode and not config module
-            if socket_path is None:
-                socket_path = self._connection.socket_path
-
-            conn = Connection(socket_path)
-            out = conn.get_prompt()
-            while to_text(out, errors='surrogate_then_replace').strip().endswith(')#'):
-                display.vvvv('wrong context, sending exit to device', self._play_context.remote_addr)
-                conn.send_command('exit')
-                out = conn.get_prompt()
-
         result = super(ActionModule, self).run(task_vars=task_vars)
+        if warnings:
+            if 'warnings' in result:
+                result['warnings'].extend(warnings)
+            else:
+                result['warnings'] = warnings
         return result
 
     @staticmethod

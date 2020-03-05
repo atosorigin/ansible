@@ -18,7 +18,6 @@ DOCUMENTATION = '''
         required: True
         description:
           - Path in which the cache plugin will save the files
-        type: list
         env:
           - name: ANSIBLE_CACHE_PLUGIN_CONNECTION
         ini:
@@ -30,10 +29,10 @@ DOCUMENTATION = '''
           - name: ANSIBLE_CACHE_PLUGIN_PREFIX
         ini:
           - key: fact_caching_prefix
-          - section: defaults
+            section: defaults
       _timeout:
         default: 86400
-        description: Expiration timeout for the cache plugin data
+        description: Expiration timeout in seconds for the cache plugin data. Set to 0 to never expire
         env:
           - name: ANSIBLE_CACHE_PLUGIN_TIMEOUT
         ini:

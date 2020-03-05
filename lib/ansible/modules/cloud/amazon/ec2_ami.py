@@ -7,111 +7,157 @@ __metaclass__ = type
 
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['stableinterface'],
-                    'supported_by': 'certified'}
+                    'supported_by': 'community'}
 
 
 DOCUMENTATION = '''
 ---
 module: ec2_ami
 version_added: "1.3"
-short_description: create or destroy an image in ec2
+short_description: Create or destroy an image (AMI) in ec2
 description:
      - Registers or deregisters ec2 images.
 options:
   instance_id:
     description:
       - Instance ID to create the AMI from.
+    type: str
   name:
     description:
       - The name of the new AMI.
+    type: str
   architecture:
     version_added: "2.3"
     description:
       - The target architecture of the image to register
+    default: "x86_64"
+    type: str
   kernel_id:
     version_added: "2.3"
     description:
       - The target kernel id of the image to register.
+    type: str
   virtualization_type:
     version_added: "2.3"
     description:
       - The virtualization type of the image to register.
+    default: "hvm"
+    type: str
   root_device_name:
     version_added: "2.3"
     description:
       - The root device name of the image to register.
+    type: str
   wait:
     description:
       - Wait for the AMI to be in state 'available' before returning.
-    default: "no"
-    choices: [ "yes", "no" ]
+    default: false
+    type: bool
   wait_timeout:
     description:
       - How long before wait gives up, in seconds.
     default: 900
+    type: int
   state:
     description:
       - Register or deregister an AMI.
     default: 'present'
     choices: [ "absent", "present" ]
+    type: str
   description:
     description:
       - Human-readable string describing the contents and purpose of the AMI.
+    type: str
   no_reboot:
     description:
       - Flag indicating that the bundling process should not attempt to shutdown the instance before bundling. If this flag is True, the
         responsibility of maintaining file system integrity is left to the owner of the instance.
-    default: no
-    choices: [ "yes", "no" ]
+    default: false
+    type: bool
   image_id:
     description:
       - Image ID to be deregistered.
+    type: str
   device_mapping:
     version_added: "2.0"
     description:
       - List of device hashes/dictionaries with custom configurations (same block-device-mapping parameters).
-      - >
-        Valid properties include: device_name, volume_type, size/volume_size (in GB), delete_on_termination (boolean), no_device (boolean),
-        snapshot_id, iops (for io1 volume_type), encrypted
+    type: list
+    elements: dict
+    suboptions:
+        device_name:
+          type: str
+          description: The device name. For example C(/dev/sda).
+        volume_type:
+          type: str
+          description: The volume type.  Defaults to C(gp2) when not set.
+        delete_on_termination:
+          type: bool
+          description: Whether the device should be automatically deleted when the Instance is terminated.
+        no_device:
+          type: bool
+          description: Suppresses the specified device included in the block device mapping of the AMI.
+        snapshot_id:
+          type: str
+          description: The ID of the Snapshot.
+        iops:
+          type: int
+          description: When using an C(io1) I(volume_type) this sets the number of IOPS provisioned for the volume
+        encrypted:
+          type: bool
+          description: Whether the volume should be encrypted.
+        volume_size:
+          aliases: ['size']
+          type: int
+          description: The size of the volume (in GiB)
   delete_snapshot:
     description:
       - Delete snapshots when deregistering the AMI.
-    default: "no"
-    choices: [ "yes", "no" ]
+    default: false
+    type: bool
   tags:
     description:
       - A dictionary of tags to add to the new image; '{"key":"value"}' and '{"key":"value","key":"value"}'
     version_added: "2.0"
+    type: dict
   purge_tags:
     description: Whether to remove existing tags that aren't passed in the C(tags) parameter
     version_added: "2.5"
-    default: "no"
+    default: false
+    type: bool
   launch_permissions:
     description:
       - Users and groups that should be able to launch the AMI. Expects dictionary with a key of user_ids and/or group_names. user_ids should
         be a list of account ids. group_name should be a list of groups, "all" is the only acceptable value currently.
       - You must pass all desired launch permissions if you wish to modify existing launch permissions (passing just groups will remove all users)
     version_added: "2.0"
+    type: dict
   image_location:
     description:
       - The s3 location of an image to use for the AMI.
     version_added: "2.5"
+    type: str
   enhanced_networking:
     description:
       - A boolean representing whether enhanced networking with ENA is enabled or not.
     version_added: "2.5"
+    type: bool
   billing_products:
     description:
       - A list of valid billing codes. To be used with valid accounts by aws marketplace vendors.
     version_added: "2.5"
+    type: list
+    elements: str
   ramdisk_id:
     description:
       - The ID of the RAM disk.
     version_added: "2.5"
+    type: str
   sriov_net_support:
     description:
       - Set to simple to enable enhanced networking with the Intel 82599 Virtual Function interface for the AMI and any instances that you launch from the AMI.
     version_added: "2.5"
+    type: str
 author:
     - "Evan Duffield (@scicoin-project) <eduffield@iacquire.com>"
     - "Constantin Bugneac (@Constantin07) <constantin.bugneac@endava.com>"
@@ -211,12 +257,12 @@ EXAMPLES = '''
 
 RETURN = '''
 architecture:
-    description: architecture of image
+    description: Architecture of image.
     returned: when AMI is created or already exists
-    type: string
+    type: str
     sample: "x86_64"
 block_device_mapping:
-    description: block device mapping associated with image
+    description: Block device mapping associated with image.
     returned: when AMI is created or already exists
     type: dict
     sample: {
@@ -229,73 +275,73 @@ block_device_mapping:
         }
     }
 creationDate:
-    description: creation date of image
+    description: Creation date of image.
     returned: when AMI is created or already exists
-    type: string
+    type: str
     sample: "2015-10-15T22:43:44.000Z"
 description:
-    description: description of image
+    description: Description of image.
     returned: when AMI is created or already exists
-    type: string
+    type: str
     sample: "nat-server"
 hypervisor:
-    description: type of hypervisor
+    description: Type of hypervisor.
     returned: when AMI is created or already exists
-    type: string
+    type: str
     sample: "xen"
 image_id:
-    description: id of the image
+    description: ID of the image.
     returned: when AMI is created or already exists
-    type: string
+    type: str
     sample: "ami-1234abcd"
 is_public:
-    description: whether image is public
+    description: Whether image is public.
     returned: when AMI is created or already exists
     type: bool
     sample: false
 launch_permission:
-    description: permissions allowing other accounts to access the AMI
+    description: Permissions allowing other accounts to access the AMI.
     returned: when AMI is created or already exists
     type: list
     sample:
       - group: "all"
 location:
-    description: location of image
+    description: Location of image.
     returned: when AMI is created or already exists
-    type: string
+    type: str
     sample: "315210894379/nat-server"
 name:
-    description: ami name of image
+    description: AMI name of image.
     returned: when AMI is created or already exists
-    type: string
+    type: str
     sample: "nat-server"
 ownerId:
-    description: owner of image
+    description: Owner of image.
     returned: when AMI is created or already exists
-    type: string
+    type: str
     sample: "435210894375"
 platform:
-    description: platform of image
+    description: Platform of image.
     returned: when AMI is created or already exists
-    type: string
+    type: str
     sample: null
 root_device_name:
-    description: root device name of image
+    description: Root device name of image.
     returned: when AMI is created or already exists
-    type: string
+    type: str
     sample: "/dev/sda1"
 root_device_type:
-    description: root device type of image
+    description: Root device type of image.
     returned: when AMI is created or already exists
-    type: string
+    type: str
     sample: "ebs"
 state:
-    description: state of image
+    description: State of image.
     returned: when AMI is created or already exists
-    type: string
+    type: str
     sample: "available"
 tags:
-    description: a dictionary of tags assigned to image
+    description: A dictionary of tags assigned to image.
     returned: when AMI is created or already exists
     type: dict
     sample: {
@@ -303,13 +349,13 @@ tags:
         "Name": "nat-server"
     }
 virtualization_type:
-    description: image virtualization type
+    description: Image virtualization type.
     returned: when AMI is created or already exists
-    type: string
+    type: str
     sample: "hvm"
 snapshots_deleted:
-    description: a list of snapshot ids deleted after deregistering image
-    returned: after AMI is deregistered, if 'delete_snapshot' is set to 'yes'
+    description: A list of snapshot ids deleted after deregistering image.
+    returned: after AMI is deregistered, if I(delete_snapshot=true)
     type: list
     sample: [
         "snap-fbcccb8f",
@@ -318,14 +364,13 @@ snapshots_deleted:
 '''
 
 import time
-from ansible.module_utils.ec2 import get_aws_connection_info, ec2_argument_spec, boto3_conn, camel_dict_to_snake_dict
-from ansible.module_utils.ec2 import ansible_dict_to_boto3_tag_list, boto3_tag_list_to_ansible_dict, compare_aws_tags
+from ansible.module_utils.ec2 import ansible_dict_to_boto3_tag_list, boto3_tag_list_to_ansible_dict, camel_dict_to_snake_dict, compare_aws_tags
 from ansible.module_utils.aws.core import AnsibleAWSModule
 
 try:
     import botocore
 except ImportError:
-    pass
+    pass  # caught by AnsibleAWSModule
 
 
 def get_block_device_mapping(image):
@@ -406,15 +451,6 @@ def create_image(module, connection):
             'Description': description
         }
 
-        images = connection.describe_images(
-            Filters=[
-                {
-                    'Name': 'name',
-                    'Values': [name]
-                }
-            ]
-        ).get('Images')
-
         block_device_mapping = None
 
         if device_mapping:
@@ -429,8 +465,8 @@ def create_image(module, connection):
                 device = rename_item_if_exists(device, 'volume_type', 'VolumeType', 'Ebs')
                 device = rename_item_if_exists(device, 'snapshot_id', 'SnapshotId', 'Ebs')
                 device = rename_item_if_exists(device, 'delete_on_termination', 'DeleteOnTermination', 'Ebs')
-                device = rename_item_if_exists(device, 'size', 'VolumeSize', 'Ebs')
-                device = rename_item_if_exists(device, 'volume_size', 'VolumeSize', 'Ebs')
+                device = rename_item_if_exists(device, 'size', 'VolumeSize', 'Ebs', attribute_type=int)
+                device = rename_item_if_exists(device, 'volume_size', 'VolumeSize', 'Ebs', attribute_type=int)
                 device = rename_item_if_exists(device, 'iops', 'Iops', 'Ebs')
                 device = rename_item_if_exists(device, 'encrypted', 'Encrypted', 'Ebs')
                 block_device_mapping.append(device)
@@ -505,7 +541,7 @@ def deregister_image(module, connection):
     snapshots = []
     if 'BlockDeviceMappings' in image:
         for mapping in image.get('BlockDeviceMappings'):
-            snapshot_id = mapping.get('SnapshotId')
+            snapshot_id = mapping.get('Ebs', {}).get('SnapshotId')
             if snapshot_id is not None:
                 snapshots.append(snapshot_id)
 
@@ -572,7 +608,7 @@ def update_image(module, connection, image_id):
                                                   LaunchPermission=dict(Add=to_add, Remove=to_remove))
                 changed = True
             except (botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError) as e:
-                module.fail_json_aws(e, msg="Error updating launch permissions")
+                module.fail_json_aws(e, msg="Error updating launch permissions of image %s" % image_id)
 
     desired_tags = module.params.get('tags')
     if desired_tags is not None:
@@ -626,29 +662,30 @@ def get_image_by_id(module, connection, image_id):
                 result['ProductCodes'] = connection.describe_image_attribute(Attribute='productCodes', ImageId=image_id)['ProductCodes']
             except botocore.exceptions.ClientError as e:
                 if e.response['Error']['Code'] != 'InvalidAMIID.Unavailable':
-                    module.fail_json_aws(e, msg="Error retrieving image attributes" % image_id)
+                    module.fail_json_aws(e, msg="Error retrieving image attributes for image %s" % image_id)
             except botocore.exceptions.BotoCoreError as e:
-                module.fail_json_aws(e, msg="Error retrieving image attributes" % image_id)
+                module.fail_json_aws(e, msg="Error retrieving image attributes for image %s" % image_id)
             return result
         module.fail_json(msg="Invalid number of instances (%s) found for image_id: %s." % (str(len(images)), image_id))
     except (botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError) as e:
         module.fail_json_aws(e, msg="Error retrieving image by image_id")
 
 
-def rename_item_if_exists(dict_object, attribute, new_attribute, child_node=None):
+def rename_item_if_exists(dict_object, attribute, new_attribute, child_node=None, attribute_type=None):
     new_item = dict_object.get(attribute)
     if new_item is not None:
+        if attribute_type is not None:
+            new_item = attribute_type(new_item)
         if child_node is None:
-            dict_object[new_attribute] = dict_object.get(attribute)
+            dict_object[new_attribute] = new_item
         else:
-            dict_object[child_node][new_attribute] = dict_object.get(attribute)
+            dict_object[child_node][new_attribute] = new_item
         dict_object.pop(attribute)
     return dict_object
 
 
 def main():
-    argument_spec = ec2_argument_spec()
-    argument_spec.update(dict(
+    argument_spec = dict(
         instance_id=dict(),
         image_id=dict(),
         architecture=dict(default='x86_64'),
@@ -661,7 +698,7 @@ def main():
         wait_timeout=dict(default=900, type='int'),
         description=dict(default=''),
         no_reboot=dict(default=False, type='bool'),
-        state=dict(default='present'),
+        state=dict(default='present', choices=['present', 'absent']),
         device_mapping=dict(type='list'),
         tags=dict(type='dict'),
         launch_permissions=dict(type='dict'),
@@ -671,21 +708,21 @@ def main():
         ramdisk_id=dict(),
         sriov_net_support=dict(),
         purge_tags=dict(type='bool', default=False)
-    ))
+    )
 
     module = AnsibleAWSModule(
         argument_spec=argument_spec,
         required_if=[
             ['state', 'absent', ['image_id']],
-            ['state', 'present', ['name']],
         ]
     )
 
-    try:
-        region, ec2_url, aws_connect_kwargs = get_aws_connection_info(module, boto3=True)
-        connection = boto3_conn(module, conn_type='client', resource='ec2', region=region, endpoint=ec2_url, **aws_connect_kwargs)
-    except botocore.exceptions.NoRegionError:
-        module.fail_json(msg=("Region must be specified as a parameter in AWS_DEFAULT_REGION environment variable or in boto configuration file."))
+    # Using a required_one_of=[['name', 'image_id']] overrides the message that should be provided by
+    # the required_if for state=absent, so check manually instead
+    if not any([module.params['image_id'], module.params['name']]):
+        module.fail_json(msg="one of the following is required: name, image_id")
+
+    connection = module.client('ec2')
 
     if module.params.get('state') == 'absent':
         deregister_image(module, connection)

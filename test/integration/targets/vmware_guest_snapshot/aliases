@@ -1,3 +1,4 @@
-posix/ci/cloud/group4/vcenter
 cloud/vcenter
-destructive
+shippable/vcenter/group1
+needs/target/prepare_vmware_tests
+zuul/vmware/vcenter_1esxi

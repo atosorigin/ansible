@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 # (c) 2015, Kevin Brebanov <https://github.com/kbrebanov>
-# Based on pacman (Afterburn <http://github.com/afterburn>, Aaron Bull Schaefer <aaron@elasticdog.com>)
+# Based on pacman (Afterburn <https://github.com/afterburn>, Aaron Bull Schaefer <aaron@elasticdog.com>)
 # and apt (Matthew Williams <matthew@flowroute.com>) modules.
 #
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
@@ -35,6 +35,8 @@ options:
   name:
     description:
       - A package name, like C(foo), or multiple packages, like C(foo, bar).
+    type: list
+    elements: str
   repository:
     description:
       - A package repository or multiple repositories.
@@ -298,7 +300,7 @@ def main():
     module = AnsibleModule(
         argument_spec=dict(
             state=dict(default='present', choices=['present', 'installed', 'absent', 'removed', 'latest']),
-            name=dict(type='list'),
+            name=dict(type='list', elements='str'),
             repository=dict(type='list'),
             update_cache=dict(default='no', type='bool'),
             upgrade=dict(default='no', type='bool'),

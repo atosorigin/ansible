@@ -1,7 +1,5 @@
 ---
 - debug: msg="START connection={{ ansible_connection }} nxos common/net_user.yaml"
-- debug: msg="Using provider={{ connection.transport }}"
-  when: ansible_connection == "local"
 
 # Add minimal testcase to check args are passed correctly to
 # implementation module and module run is successful.
@@ -10,7 +8,6 @@
   net_user:
     name: ansibletest1
     state: absent
-    provider: "{{ connection }}"
 
 # Start tests
 - name: Create user with platform agnostic module
@@ -18,19 +15,17 @@
     name: ansibletest1
     roles: network-operator
     state: present
-    provider: "{{ connection }}"
   register: result
 
 - assert:
     that:
       - 'result.changed == true'
       - '"username" in result.commands[0]'
-      - '"role network-operator" in result.commands[1]'
+      - '"role network-operator" in result.commands[0]'
 
 - name: teardown
   net_user:
     name: ansibletest1
     state: absent
-    provider: "{{ connection }}"
 
 - debug: msg="END connection={{ ansible_connection }} nxos common/net_user.yaml"

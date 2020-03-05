@@ -1,21 +1,13 @@
 #!/usr/bin/python
 #
-# This is a free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This Ansible library is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this library.  If not, see <http://www.gnu.org/licenses/>.
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
 
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['stableinterface'],
-                    'supported_by': 'certified'}
+                    'supported_by': 'community'}
 
 
 DOCUMENTATION = '''
@@ -36,8 +28,11 @@ options:
       route table will be created. To change tags of a route table you must look up by id.
     default: tag
     choices: [ 'tag', 'id' ]
+    type: str
   propagating_vgw_ids:
     description: Enable route propagation from virtual gateways specified by ID.
+    type: list
+    elements: str
   purge_routes:
     version_added: "2.3"
     description: Purge existing routes that are not found in routes.
@@ -47,34 +42,46 @@ options:
     version_added: "2.3"
     description: Purge existing subnets that are not found in subnets. Ignored unless the subnets option is supplied.
     default: 'true'
+    type: bool
   purge_tags:
     version_added: "2.5"
-    description: Purge existing tags that are not found in route table
+    description: Purge existing tags that are not found in route table.
     type: bool
     default: 'no'
   route_table_id:
-    description: The ID of the route table to update or delete.
+    description:
+    - The ID of the route table to update or delete.
+    - Required when I(lookup=id).
+    type: str
   routes:
     description: List of routes in the route table.
         Routes are specified as dicts containing the keys 'dest' and one of 'gateway_id',
-        'instance_id', 'interface_id', or 'vpc_peering_connection_id'.
+        'instance_id', 'network_interface_id', or 'vpc_peering_connection_id'.
         If 'gateway_id' is specified, you can refer to the VPC's IGW by using the value 'igw'.
         Routes are required for present states.
+    type: list
+    elements: dict
   state:
-    description: Create or destroy the VPC route table
+    description: Create or destroy the VPC route table.
     default: present
     choices: [ 'present', 'absent' ]
+    type: str
   subnets:
     description: An array of subnets to add to this route table. Subnets may be specified
       by either subnet ID, Name tag, or by a CIDR such as '10.0.0.0/24'.
+    type: list
+    elements: str
   tags:
     description: >
-      A dictionary of resource tags of the form: { tag1: value1, tag2: value2 }. Tags are
+      A dictionary of resource tags of the form: C({ tag1: value1, tag2: value2 }). Tags are
       used to uniquely identify route tables within a VPC when the route_table_id is not supplied.
     aliases: [ "resource_tags" ]
+    type: dict
   vpc_id:
-    description: VPC ID of the VPC in which to create the route table.
-    required: true
+    description:
+    - VPC ID of the VPC in which to create the route table.
+    - Required when I(state=present) or I(lookup=tag).
+    type: str
 extends_documentation_fragment:
     - aws
     - ec2
@@ -142,22 +149,22 @@ route_table:
         route_table_association_id:
           description: ID of association between route table and subnet
           returned: always
-          type: string
+          type: str
           sample: rtbassoc-ab47cfc3
         route_table_id:
           description: ID of the route table
           returned: always
-          type: string
+          type: str
           sample: rtb-bf779ed7
         subnet_id:
           description: ID of the subnet
           returned: always
-          type: string
+          type: str
           sample: subnet-82055af9
     id:
       description: ID of the route table (same as route_table_id for backwards compatibility)
       returned: always
-      type: string
+      type: str
       sample: rtb-bf779ed7
     propagating_vgws:
       description: List of Virtual Private Gateways propagating routes
@@ -167,7 +174,7 @@ route_table:
     route_table_id:
       description: ID of the route table
       returned: always
-      type: string
+      type: str
       sample: rtb-bf779ed7
     routes:
       description: List of routes in the route table
@@ -177,37 +184,37 @@ route_table:
         destination_cidr_block:
           description: CIDR block of destination
           returned: always
-          type: string
+          type: str
           sample: 10.228.228.0/22
         gateway_id:
           description: ID of the gateway
           returned: when gateway is local or internet gateway
-          type: string
+          type: str
           sample: local
         instance_id:
           description: ID of a NAT instance
           returned: when the route is via an EC2 instance
-          type: string
+          type: str
           sample: i-abcd123456789
         instance_owner_id:
           description: AWS account owning the NAT instance
           returned: when the route is via an EC2 instance
-          type: string
+          type: str
           sample: 123456789012
         nat_gateway_id:
           description: ID of the NAT gateway
           returned: when the route is via a NAT gateway
-          type: string
+          type: str
           sample: local
         origin:
           description: mechanism through which the route is in the table
           returned: always
-          type: string
+          type: str
           sample: CreateRouteTable
         state:
           description: state of the route
           returned: always
-          type: string
+          type: str
           sample: active
     tags:
       description: Tags applied to the route table
@@ -219,7 +226,7 @@ route_table:
     vpc_id:
       description: ID for the VPC in which the route lives
       returned: always
-      type: string
+      type: str
       sample: vpc-6e2d2407
 '''
 
@@ -227,7 +234,6 @@ import re
 from time import sleep
 from ansible.module_utils.aws.core import AnsibleAWSModule
 from ansible.module_utils.aws.waiters import get_waiter
-from ansible.module_utils.ec2 import ec2_argument_spec, boto3_conn, get_aws_connection_info
 from ansible.module_utils.ec2 import ansible_dict_to_boto3_filter_list
 from ansible.module_utils.ec2 import camel_dict_to_snake_dict, snake_dict_to_camel_dict
 from ansible.module_utils.ec2 import ansible_dict_to_boto3_tag_list, boto3_tag_list_to_ansible_dict
@@ -237,7 +243,7 @@ from ansible.module_utils.ec2 import compare_aws_tags, AWSRetry
 try:
     import botocore
 except ImportError:
-    pass  # handled by AnsibleAWSModule
+    pass  # caught by AnsibleAWSModule
 
 
 CIDR_RE = re.compile(r'^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$')
@@ -256,7 +262,7 @@ def find_subnets(connection, module, vpc_id, identified_subnets):
     'Name' tag, or a CIDR such as 10.0.0.0/8.
 
     Note that this function is duplicated in other ec2 modules, and should
-    potentially be moved into potentially be moved into a shared module_utils
+    potentially be moved into a shared module_utils
     """
     subnet_ids = []
     subnet_names = []
@@ -294,7 +300,7 @@ def find_subnets(connection, module, vpc_id, identified_subnets):
             module.fail_json_aws(e, msg="Couldn't find subnet with names %s" % subnet_names)
 
         for name in subnet_names:
-            matching_count = len([1 for s in subnets_by_name if s.tags.get('Name') == name])
+            matching_count = len([1 for s in subnets_by_name for t in s.get('Tags', []) if t['Key'] == 'Name' and t['Value'] == name])
             if matching_count == 0:
                 module.fail_json(msg='Subnet named "{0}" does not exist'.format(name))
             elif matching_count > 1:
@@ -432,8 +438,9 @@ def index_of_matching_route(route_spec, routes_to_match):
     for i, route in enumerate(routes_to_match):
         if route_spec_matches_route(route_spec, route):
             return "exact", i
-        elif route_spec_matches_route_cidr(route_spec, route):
-            return "replace", i
+        elif 'Origin' in route_spec and route_spec['Origin'] != 'EnableVgwRoutePropagation':
+            if route_spec_matches_route_cidr(route_spec, route):
+                return "replace", i
 
 
 def ensure_routes(connection=None, module=None, route_table=None, route_specs=None,
@@ -707,21 +714,18 @@ def ensure_route_table_present(connection, module):
 
 
 def main():
-    argument_spec = ec2_argument_spec()
-    argument_spec.update(
-        dict(
-            lookup=dict(default='tag', choices=['tag', 'id']),
-            propagating_vgw_ids=dict(type='list'),
-            purge_routes=dict(default=True, type='bool'),
-            purge_subnets=dict(default=True, type='bool'),
-            purge_tags=dict(default=False, type='bool'),
-            route_table_id=dict(),
-            routes=dict(default=[], type='list'),
-            state=dict(default='present', choices=['present', 'absent']),
-            subnets=dict(type='list'),
-            tags=dict(type='dict', aliases=['resource_tags']),
-            vpc_id=dict()
-        )
+    argument_spec = dict(
+        lookup=dict(default='tag', choices=['tag', 'id']),
+        propagating_vgw_ids=dict(type='list'),
+        purge_routes=dict(default=True, type='bool'),
+        purge_subnets=dict(default=True, type='bool'),
+        purge_tags=dict(default=False, type='bool'),
+        route_table_id=dict(),
+        routes=dict(default=[], type='list'),
+        state=dict(default='present', choices=['present', 'absent']),
+        subnets=dict(type='list'),
+        tags=dict(type='dict', aliases=['resource_tags']),
+        vpc_id=dict()
     )
 
     module = AnsibleAWSModule(argument_spec=argument_spec,
@@ -730,10 +734,7 @@ def main():
                                            ['state', 'present', ['vpc_id']]],
                               supports_check_mode=True)
 
-    region, ec2_url, aws_connect_params = get_aws_connection_info(module, boto3=True)
-
-    connection = boto3_conn(module, conn_type='client', resource='ec2',
-                            region=region, endpoint=ec2_url, **aws_connect_params)
+    connection = module.client('ec2')
 
     state = module.params.get('state')
 

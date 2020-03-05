@@ -47,7 +47,7 @@ existing system, using the `--check` flag to the `ansible` command will report i
 bring the system into a desired state.
 
 This can let you know up front if there is any need to deploy onto the given system.  Ordinarily scripts and commands don't run in check mode, so if you
-want certain steps to always execute in check mode, such as calls to the script module, disable check mode for those tasks::
+want certain steps to execute in normal mode even when the `--check` flag is used, such as calls to the script module, disable check mode for those tasks::
 
 
    roles:
@@ -268,7 +268,7 @@ system.
        An introduction to playbooks
    :ref:`playbooks_delegation`
        Delegation, useful for working with load balancers, clouds, and locally executed steps.
-   `User Mailing List <http://groups.google.com/group/ansible-project>`_
+   `User Mailing List <https://groups.google.com/group/ansible-project>`_
        Have a question?  Stop by the google group!
    `irc.freenode.net <http://irc.freenode.net>`_
        #ansible IRC chat channel

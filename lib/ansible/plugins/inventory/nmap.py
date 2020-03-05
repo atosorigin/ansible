@@ -17,6 +17,10 @@ DOCUMENTATION = '''
     requirements:
       - nmap CLI installed
     options:
+        plugin:
+            description: token that ensures this is a source file for the 'nmap' plugin.
+            required: True
+            choices: ['nmap']
         address:
             description: Network IP or range of IPs to scan, you can use a simple range (10.2.2.15-25) or CIDR notation.
             required: True
@@ -43,7 +47,7 @@ EXAMPLES = '''
     # inventory.config file in YAML format
     plugin: nmap
     strict: False
-    network: 192.168.0.0/24
+    address: 192.168.0.0/24
 '''
 
 import os
@@ -53,25 +57,19 @@ from subprocess import Popen, PIPE
 
 from ansible import constants as C
 from ansible.errors import AnsibleParserError
-from ansible.module_utils._text import to_native
+from ansible.module_utils._text import to_native, to_text
 from ansible.plugins.inventory import BaseInventoryPlugin, Constructable, Cacheable
+from ansible.module_utils.common.process import get_bin_path
 
 
 class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
 
     NAME = 'nmap'
-    find_host = re.compile(r'^Nmap scan report for ([\w,.,-]+) \(([\w,.,:,\[,\]]+)\)')
+    find_host = re.compile(r'^Nmap scan report for ([\w,.,-]+)(?: \(([\w,.,:,\[,\]]+)\))?')
     find_port = re.compile(r'^(\d+)/(\w+)\s+(\w+)\s+(\w+)')
 
     def __init__(self):
-
         self._nmap = None
-        for path in os.environ.get('PATH').split(':'):
-            candidate = os.path.join(path, 'nmap')
-            if os.path.exists(candidate):
-                self._nmap = candidate
-                break
-
         super(InventoryModule, self).__init__()
 
     def verify_file(self, path):
@@ -87,8 +85,10 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
 
     def parse(self, inventory, loader, path, cache=False):
 
-        if self._nmap is None:
-            raise AnsibleParserError('nmap inventory plugin requires the nmap cli tool to work')
+        try:
+            self._nmap = get_bin_path('nmap')
+        except ValueError as e:
+            raise AnsibleParserError('nmap inventory plugin requires the nmap cli tool to work: {0}'.format(to_native(e)))
 
         super(InventoryModule, self).parse(inventory, loader, path, cache=cache)
 
@@ -122,7 +122,13 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
             host = None
             ip = None
             ports = []
-            for line in stdout.splitlines():
+
+            try:
+                t_stdout = to_text(stdout, errors='surrogate_or_strict')
+            except UnicodeError as e:
+                raise AnsibleParserError('Invalid (non unicode) input returned: %s' % to_native(e))
+
+            for line in t_stdout.splitlines():
                 hits = self.find_host.match(line)
                 if hits:
                     if host is not None:
@@ -134,7 +140,11 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                     else:
                         host = hits.group(1)
 
-                    ip = hits.group(2)
+                    # if no reverse dns exists, just use ip instead as hostname
+                    if hits.group(2) is not None:
+                        ip = hits.group(2)
+                    else:
+                        ip = hits.group(1)
 
                     if host is not None:
                         # update inventory
@@ -150,7 +160,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
 
                 # TODO: parse more data, OS?
 
-            # if any lefotvers
+            # if any leftovers
             if host and ports:
                 self.inventory.set_variable(host, 'ports', ports)
 

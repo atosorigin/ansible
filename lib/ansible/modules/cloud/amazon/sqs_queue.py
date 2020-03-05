@@ -8,7 +8,7 @@ __metaclass__ = type
 
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['stableinterface'],
-                    'supported_by': 'certified'}
+                    'supported_by': 'community'}
 
 
 DOCUMENTATION = """
@@ -28,37 +28,46 @@ requirements:
 options:
   state:
     description:
-      - Create or delete the queue
+      - Create or delete the queue.
     required: false
     choices: ['present', 'absent']
     default: 'present'
+    type: str
   name:
     description:
       - Name of the queue.
     required: true
+    type: str
   default_visibility_timeout:
     description:
       - The default visibility timeout in seconds.
+    type: int
   message_retention_period:
     description:
       - The message retention period in seconds.
+    type: int
   maximum_message_size:
     description:
       - The maximum message size in bytes.
+    type: int
   delivery_delay:
     description:
       - The delivery delay in seconds.
+    type: int
   receive_message_wait_time:
     description:
       - The receive message wait time in seconds.
+    type: int
   policy:
     description:
-      - The json dict policy to attach to queue
+      - The JSON dict policy to attach to queue.
     version_added: "2.1"
+    type: dict
   redrive_policy:
     description:
-      - json dict with the redrive_policy (see example)
+      - JSON dict with the redrive_policy (see example).
     version_added: "2.2"
+    type: dict
 extends_documentation_fragment:
     - aws
     - ec2
@@ -87,12 +96,12 @@ message_retention_period:
     sample: 345600
 name:
     description: Name of the SQS Queue
-    type: string
+    type: str
     returned: always
     sample: "queuename-987d2de0"
 queue_arn:
     description: The queue's Amazon resource name (ARN).
-    type: string
+    type: str
     returned: on successful creation or update of the queue
     sample: 'arn:aws:sqs:us-east-1:199999999999:queuename-987d2de0'
 receive_message_wait_time:
@@ -102,7 +111,7 @@ receive_message_wait_time:
     sample: 0
 region:
     description: Region that the queue was created within
-    type: string
+    type: str
     returned: always
     sample: 'us-east-1'
 '''
@@ -224,7 +233,7 @@ def set_queue_attribute(queue, attribute, value, check_mode=False):
 
     try:
         existing_value = queue.get_attributes(attributes=attribute)[attribute]
-    except:
+    except Exception:
         existing_value = ''
 
     # convert dict attributes to JSON strings (sort keys for comparing)

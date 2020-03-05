@@ -1,6 +1,6 @@
 #!powershell
 
-# Copyright (c) 2018 Ansible Project
+# Copyright: (c) 2018, Ansible Project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 #Requires -Module Ansible.ModuleUtils.Legacy
@@ -12,15 +12,17 @@ Function Get-CustomFacts {
     $factpath = $null
   )
 
-  if (-not (Test-Path -Path $factpath)) {
-    Fail-Json $result "The path $factpath does not exist. Typo?"
+  if (Test-Path -Path $factpath) {
+    $FactsFiles = Get-ChildItem -Path $factpath | Where-Object -FilterScript {($PSItem.PSIsContainer -eq $false) -and ($PSItem.Extension -eq '.ps1')}
+
+    foreach ($FactsFile in $FactsFiles) {
+        $out = & $($FactsFile.FullName)
+        $result.ansible_facts.Add("ansible_$(($FactsFile.Name).Split('.')[0])", $out)
+    }
   }
-
-  $FactsFiles = Get-ChildItem -Path $factpath | Where-Object -FilterScript {($PSItem.PSIsContainer -eq $false) -and ($PSItem.Extension -eq '.ps1')}
-
-  foreach ($FactsFile in $FactsFiles) {
-      $out = & $($FactsFile.FullName)
-      $result.ansible_facts.Add("ansible_$(($FactsFile.Name).Split('.')[0])", $out)
+  else
+  {
+        Add-Warning $result "Non existing path was set for local facts - $factpath"
   }
 }
 
@@ -29,16 +31,30 @@ Function Get-MachineSid {
     # only accessible by the Local System account. This method get's the local
     # admin account (ends with -500) and lops it off to get the machine sid.
 
-    Add-Type -AssemblyName System.DirectoryServices.AccountManagement
-    $principal_context = New-Object -TypeName System.DirectoryServices.AccountManagement.PrincipalContext([System.DirectoryServices.AccountManagement.ContextType]::Machine)
-    $user_principal = New-Object -TypeName System.DirectoryServices.AccountManagement.UserPrincipal($principal_context)
-    $searcher = New-Object -TypeName System.DirectoryServices.AccountManagement.PrincipalSearcher($user_principal)
-    $users = $searcher.FindAll() | Where-Object { $_.Sid -like "*-500" }
-
     $machine_sid = $null
-    if ($users -ne $null) {
-        $machine_sid = $users.Sid.AccountDomainSid.Value
+
+    try {
+        $admins_sid = "S-1-5-32-544"
+    $admin_group = ([Security.Principal.SecurityIdentifier]$admins_sid).Translate([Security.Principal.NTAccount]).Value
+
+        Add-Type -AssemblyName System.DirectoryServices.AccountManagement
+        $principal_context = New-Object -TypeName System.DirectoryServices.AccountManagement.PrincipalContext([System.DirectoryServices.AccountManagement.ContextType]::Machine)
+        $group_principal = New-Object -TypeName System.DirectoryServices.AccountManagement.GroupPrincipal($principal_context, $admin_group)
+        $searcher = New-Object -TypeName System.DirectoryServices.AccountManagement.PrincipalSearcher($group_principal)
+        $groups = $searcher.FindOne()
+
+        foreach ($user in $groups.Members) {
+            $user_sid = $user.Sid
+            if ($user_sid.Value.EndsWith("-500")) {
+                $machine_sid = $user_sid.AccountDomainSid.Value
+                break
+            }
+        }
+    } catch {
+        #can fail for any number of reasons, if it does just return the original null
+        Add-Warning -obj $result -message "Error during machine sid retrieval: $($_.Exception.Message)"
     }
+
     return $machine_sid
 }
 
@@ -60,7 +76,7 @@ $result = @{
 $grouped_subsets = @{
     min=[System.Collections.Generic.List[string]]@('date_time','distribution','dns','env','local','platform','powershell_version','user')
     network=[System.Collections.Generic.List[string]]@('all_ipv4_addresses','all_ipv6_addresses','interfaces','windows_domain', 'winrm')
-    hardware=[System.Collections.Generic.List[string]]@('bios','memory','processor','uptime')
+    hardware=[System.Collections.Generic.List[string]]@('bios','memory','processor','uptime','virtual')
     external=[System.Collections.Generic.List[string]]@('facter')
 }
 
@@ -124,9 +140,17 @@ $ansible_facts = @{
 
 $osversion = [Environment]::OSVersion
 
+if ($osversion.Version -lt [version]"6.2") {
+    # Server 2008, 2008 R2, and Windows 7 are not tested in CI and we want to let customers know about it before
+    # removing support altogether.
+    $version_string = "{0}.{1}" -f ($osversion.Version.Major, $osversion.Version.Minor)
+    $msg = "Windows version '$version_string' will no longer be supported or tested in the next Ansible release"
+    Add-DeprecationWarning -obj $result -message $msg -version "2.11"
+}
+
 if($gather_subset.Contains('all_ipv4_addresses') -or $gather_subset.Contains('all_ipv6_addresses')) {
     $netcfg = Get-LazyCimInstance Win32_NetworkAdapterConfiguration
-    
+
     # TODO: split v4/v6 properly, return in separate keys
     $ips = @()
     Foreach ($ip in $netcfg.IPAddress) {
@@ -184,21 +208,37 @@ if($gather_subset.Contains('date_time')) {
 
 if($gather_subset.Contains('distribution')) {
     $win32_os = Get-LazyCimInstance Win32_OperatingSystem
+    $product_type = switch($win32_os.ProductType) {
+        1 { "workstation" }
+        2 { "domain_controller" }
+        3 { "server" }
+        default { "unknown" }
+    }
+
+    $installation_type = $null
+    $current_version_path = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion"
+    if (Test-Path -LiteralPath $current_version_path) {
+        $install_type_prop = Get-ItemProperty -LiteralPath $current_version_path -ErrorAction SilentlyContinue
+        $installation_type = [String]$install_type_prop.InstallationType
+    }
+
     $ansible_facts += @{
         ansible_distribution = $win32_os.Caption
         ansible_distribution_version = $osversion.Version.ToString()
         ansible_distribution_major_version = $osversion.Version.Major.ToString()
         ansible_os_family = "Windows"
         ansible_os_name = ($win32_os.Name.Split('|')[0]).Trim()
+        ansible_os_product_type = $product_type
+        ansible_os_installation_type = $installation_type
     }
 }
 
 if($gather_subset.Contains('env')) {
     $env_vars = @{ }
     foreach ($item in Get-ChildItem Env:) {
-        $name = $item | select -ExpandProperty Name
+        $name = $item | Select-Object -ExpandProperty Name
         # Powershell ConvertTo-Json fails if string ends with \
-        $value = ($item | select -ExpandProperty Value).TrimEnd("\")
+        $value = ($item | Select-Object -ExpandProperty Value).TrimEnd("\")
         $env_vars.Add($name, $value)
     }
 
@@ -210,7 +250,7 @@ if($gather_subset.Contains('env')) {
 if($gather_subset.Contains('facter')) {
     # See if Facter is on the System Path
     Try {
-        $facter_exe = Get-Command facter -ErrorAction Stop
+        Get-Command facter -ErrorAction Stop > $null
         $facter_installed = $true
     } Catch {
         $facter_installed = $false
@@ -218,7 +258,7 @@ if($gather_subset.Contains('facter')) {
 
     # Get JSON from Facter, and parse it out.
     if ($facter_installed) {
-        &facter -j | Tee-Object  -Variable facter_output | Out-Null
+        &facter -j | Tee-Object  -Variable facter_output > $null
         $facts = "$facter_output" | ConvertFrom-Json
         ForEach($fact in $facts.PSObject.Properties) {
             $fact_name = $fact.Name
@@ -230,7 +270,7 @@ if($gather_subset.Contains('facter')) {
 if($gather_subset.Contains('interfaces')) {
     $netcfg = Get-LazyCimInstance Win32_NetworkAdapterConfiguration
     $ActiveNetcfg = @()
-    $ActiveNetcfg += $netcfg | where {$_.ipaddress -ne $null}
+    $ActiveNetcfg += $netcfg | Where-Object {$_.ipaddress -ne $null}
 
     $namespaces = Get-LazyCimInstance __Namespace -namespace root
     if ($namespaces | Where-Object { $_.Name -eq "StandardCimv" }) {
@@ -238,7 +278,7 @@ if($gather_subset.Contains('interfaces')) {
         $guid_key = "InterfaceGUID"
         $name_key = "Name"
     } else {
-        $net_adapters = Get-LazyCimInstance Win32_NetworkAdapter        
+        $net_adapters = Get-LazyCimInstance Win32_NetworkAdapter
         $guid_key = "GUID"
         $name_key = "NetConnectionID"
     }
@@ -272,7 +312,7 @@ if($gather_subset.Contains('interfaces')) {
     }
 }
 
-if ($gather_subset.Contains("local") -and $factpath -ne $null) {
+if ($gather_subset.Contains("local") -and $null -ne $factpath) {
     # Get any custom facts; results are updated in the
     Get-CustomFacts -factpath $factpath
 }
@@ -282,8 +322,11 @@ if($gather_subset.Contains('memory')) {
     $win32_os = Get-LazyCimInstance Win32_OperatingSystem
     $ansible_facts += @{
         # Win32_PhysicalMemory is empty on some virtual platforms
-        ansible_memtotal_mb = ([math]::round($win32_cs.TotalPhysicalMemory / 1024 / 1024))
-        ansible_swaptotal_mb = ([math]::round($win32_os.TotalSwapSpaceSize / 1024 / 1024))
+        ansible_memtotal_mb = ([math]::ceiling($win32_cs.TotalPhysicalMemory / 1024 / 1024))
+        ansible_memfree_mb = ([math]::ceiling($win32_os.FreePhysicalMemory / 1024))
+        ansible_swaptotal_mb = ([math]::round($win32_os.TotalSwapSpaceSize / 1024))
+        ansible_pagefiletotal_mb = ([math]::round($win32_os.SizeStoredInPagingFiles / 1024))
+        ansible_pagefilefree_mb = ([math]::round($win32_os.FreeSpaceInPagingFiles / 1024))
     }
 }
 
@@ -291,20 +334,34 @@ if($gather_subset.Contains('memory')) {
 if($gather_subset.Contains('platform')) {
     $win32_cs = Get-LazyCimInstance Win32_ComputerSystem
     $win32_os = Get-LazyCimInstance Win32_OperatingSystem
-    $ip_props = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties()
+    $domain_suffix = $win32_cs.Domain.Substring($win32_cs.Workgroup.length)
+    $fqdn = $win32_cs.DNSHostname
+
+    if( $domain_suffix -ne "")
+    {
+        $fqdn = $win32_cs.DNSHostname + "." + $domain_suffix
+    }
+
+    try {
+        $ansible_reboot_pending = Get-PendingRebootStatus
+    } catch {
+        # fails for non-admin users, set to null in this case
+        $ansible_reboot_pending = $null
+    }
 
     $ansible_facts += @{
         ansible_architecture = $win32_os.OSArchitecture
-        ansible_domain = $ip_props.DomainName
-        ansible_fqdn = ($ip_props.Hostname + "." + $ip_props.DomainName)
-        ansible_hostname = $env:COMPUTERNAME
+        ansible_domain = $domain_suffix
+        ansible_fqdn = $fqdn
+        ansible_hostname = $win32_cs.DNSHostname
+        ansible_netbios_name = $win32_cs.Name
         ansible_kernel = $osversion.Version.ToString()
-        ansible_nodename = ($ip_props.HostName + "." + $ip_props.DomainName)
+        ansible_nodename = $fqdn
         ansible_machine_id = Get-MachineSid
         ansible_owner_contact = ([string] $win32_cs.PrimaryOwnerContact)
         ansible_owner_name = ([string] $win32_cs.PrimaryOwnerName)
         # FUTURE: should this live in its own subset?
-        ansible_reboot_pending = (Get-PendingRebootStatus)
+        ansible_reboot_pending = $ansible_reboot_pending
         ansible_system = $osversion.Platform.ToString()
         ansible_system_description = ([string] $win32_os.Description)
         ansible_system_vendor = $win32_cs.Manufacturer
@@ -326,7 +383,7 @@ if($gather_subset.Contains('processor')) {
     }
 
     $cpu_list = @( )
-    for ($i=1; $i -le ($win32_cpu.NumberOfLogicalProcessors / $win32_cs.NumberOfProcessors); $i++) {
+    for ($i=1; $i -le $win32_cs.NumberOfLogicalProcessors; $i++) {
         $cpu_list += $win32_cpu.Manufacturer
         $cpu_list += $win32_cpu.Name
     }
@@ -335,8 +392,8 @@ if($gather_subset.Contains('processor')) {
         ansible_processor = $cpu_list
         ansible_processor_cores = $win32_cpu.NumberOfCores
         ansible_processor_count = $win32_cs.NumberOfProcessors
-        ansible_processor_threads_per_core = ($win32_cpu.NumberOfLogicalProcessors / $win32_cs.NumberOfProcessors / $win32_cpu.NumberOfCores)
-        ansible_processor_vcpus = ($win32_cpu.NumberOfLogicalProcessors / $win32_cs.NumberOfProcessors)
+        ansible_processor_threads_per_core = ($win32_cpu.NumberOfLogicalProcessors / $win32_cpu.NumberofCores)
+        ansible_processor_vcpus = $win32_cs.NumberOfLogicalProcessors
     }
 }
 
@@ -381,7 +438,8 @@ if($gather_subset.Contains('windows_domain')) {
 
 if($gather_subset.Contains('winrm')) {
 
-    $winrm_https_listener_parent_paths = Get-ChildItem -Path WSMan:\localhost\Listener -Recurse | Where-Object {$_.PSChildName -eq "Transport" -and $_.Value -eq "HTTPS"} | select PSParentPath
+    $winrm_https_listener_parent_paths = Get-ChildItem -Path WSMan:\localhost\Listener -Recurse -ErrorAction SilentlyContinue | `
+        Where-Object {$_.PSChildName -eq "Transport" -and $_.Value -eq "HTTPS"} | Select-Object PSParentPath
     if ($winrm_https_listener_parent_paths -isnot [array]) {
        $winrm_https_listener_parent_paths = @($winrm_https_listener_parent_paths)
     }
@@ -398,20 +456,58 @@ if($gather_subset.Contains('winrm')) {
 
     $winrm_cert_thumbprints = @()
     foreach ($https_listener in $https_listeners) {
-        $winrm_cert_thumbprints += $https_listener | where {$_.Name -EQ "CertificateThumbprint" } | select Value
+        $winrm_cert_thumbprints += $https_listener | Where-Object {$_.Name -EQ "CertificateThumbprint" } | Select-Object Value
     }
 
     $winrm_cert_expiry = @()
     foreach ($winrm_cert_thumbprint in $winrm_cert_thumbprints) {
         Try {
-            $winrm_cert_expiry += Get-ChildItem -Path Cert:\LocalMachine\My | where Thumbprint -EQ $winrm_cert_thumbprint.Value.ToString().ToUpper() | select NotAfter
-        } Catch {}
+            $winrm_cert_expiry += Get-ChildItem -Path Cert:\LocalMachine\My | Where-Object Thumbprint -EQ $winrm_cert_thumbprint.Value.ToString().ToUpper() | Select-Object NotAfter
+        } Catch {
+            Add-Warning -obj $result -message "Error during certificate expiration retrieval: $($_.Exception.Message)"
+        }
     }
 
     $winrm_cert_expirations = $winrm_cert_expiry | Sort-Object NotAfter
     if ($winrm_cert_expirations) {
         # this fact was renamed from ansible_winrm_certificate_expires due to collision with ansible_winrm_X connection var pattern
         $ansible_facts.Add("ansible_win_rm_certificate_expires", $winrm_cert_expirations[0].NotAfter.ToString("yyyy-MM-dd HH:mm:ss"))
+    }
+}
+
+if($gather_subset.Contains('virtual')) {
+    $machine_info = Get-LazyCimInstance Win32_ComputerSystem
+
+    switch ($machine_info.model) {
+        "Virtual Machine" {
+            $machine_type="Hyper-V"
+            $machine_role="guest"
+        }
+
+        "VMware Virtual Platform" {
+            $machine_type="VMware"
+            $machine_role="guest"
+        }
+
+        "VirtualBox" {
+            $machine_type="VirtualBox"
+            $machine_role="guest"
+        }
+
+        "HVM domU" {
+            $machine_type="Xen"
+            $machine_role="guest"
+        }
+
+        default {
+            $machine_type="NA"
+            $machine_role="NA"
+        }
+    }
+
+    $ansible_facts += @{
+        ansible_virtualization_role = $machine_role
+        ansible_virtualization_type = $machine_type
     }
 }
 

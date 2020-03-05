@@ -29,18 +29,24 @@ def get_file_content(path, default=None, strip=True):
                     data = default
             finally:
                 datafile.close()
-        except:
+        except Exception:
             # ignore errors as some jails/containers might have readable permissions but not allow reads to proc
             # done in 2 blocks for 2.4 compat
             pass
     return data
 
 
-def get_file_lines(path, strip=True):
+def get_file_lines(path, strip=True, line_sep=None):
     '''get list of lines from file'''
     data = get_file_content(path, strip=strip)
     if data:
-        ret = data.splitlines()
+        if line_sep is None:
+            ret = data.splitlines()
+        else:
+            if len(line_sep) == 1:
+                ret = data.rstrip(line_sep).split(line_sep)
+            else:
+                ret = data.split(line_sep)
     else:
         ret = []
     return ret
