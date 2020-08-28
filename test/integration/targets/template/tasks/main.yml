@@ -16,6 +16,9 @@
 # You should have received a copy of the GNU General Public License
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 
+- set_fact:
+    output_dir: "{{ lookup('env', 'OUTPUT_DIR') }}"
+
 - name: show python interpreter
   debug:
      msg: "{{ ansible_python['executable'] }}"
@@ -50,6 +53,24 @@
   assert:
     that:
       - "template_result.changed == true"
+
+# Basic template with non-ascii names
+- name: Check that non-ascii source and dest work
+  template:
+    src: 'café.j2'
+    dest: '{{ output_dir }}/café.txt'
+  register: template_results
+
+- name: Check that the resulting file exists
+  stat:
+    path: '{{ output_dir }}/café.txt'
+  register: stat_results
+
+- name: Check that template created the right file
+  assert:
+    that:
+      - 'template_results is changed'
+      - 'stat_results.stat["exists"]'
 
 # test for import with context on jinja-2.9 See https://github.com/ansible/ansible/issues/20494
 - name: fill in a template using import with context ala issue 20494
@@ -377,7 +398,7 @@
   assert:
     that:
       - "template_result is not changed"
-      - "'templated_var_loaded' in lookup('file', '{{output_dir | expanduser}}/short.templated')"
+      - "'templated_var_loaded' in lookup('file', output_dir + '/short.templated')"
 
 - name: change var for the template
   set_fact:
@@ -391,7 +412,7 @@
 - name: verify that the file was marked as changed in check mode but the content was not changed
   assert:
     that:
-      - "'templated_var_loaded' in lookup('file', '{{output_dir | expanduser }}/short.templated')"
+      - "'templated_var_loaded' in lookup('file', output_dir + '/short.templated')"
       - "template_result is changed"
 
 # Create a template using a child template, to ensure that variables
@@ -573,6 +594,126 @@
     that:
         - 'diff_result.stdout == ""'
         - "diff_result.rc == 0"
+
+# Check that mode=preserve works with template
+- name: Create a template which has strange permissions
+  copy:
+    content: !unsafe '{{ ansible_managed }}\n'
+    dest: '{{ output_dir }}/foo-template.j2'
+    mode: 0547
+  delegate_to: localhost
+
+- name: Use template with mode=preserve
+  template:
+    src: '{{ output_dir }}/foo-template.j2'
+    dest: '{{ output_dir }}/foo-templated.txt'
+    mode: 'preserve'
+  register: template_results
+
+- name: Get permissions from the templated file
+  stat:
+    path: '{{ output_dir }}/foo-templated.txt'
+  register: stat_results
+
+- name: Check that the resulting file has the correct permissions
+  assert:
+    that:
+      - 'template_results is changed'
+      - 'template_results.mode == "0547"'
+      - 'stat_results.stat["mode"] == "0547"'
+
+# Test output_encoding
+- name: Prepare the list of encodings we want to check, including empty string for defaults
+  set_fact:
+    template_encoding_1252_encodings: ['', 'utf-8', 'windows-1252']
+
+- name: Copy known good encoding_1252_*.expected into place
+  copy:
+    src: 'encoding_1252_{{ item | default("utf-8", true) }}.expected'
+    dest: '{{ output_dir }}/encoding_1252_{{ item }}.expected'
+  loop: '{{ template_encoding_1252_encodings }}'
+
+- name: Generate the encoding_1252_* files from templates using various encoding combinations
+  template:
+    src: 'encoding_1252.j2'
+    dest: '{{ output_dir }}/encoding_1252_{{ item }}.txt'
+    output_encoding: '{{ item }}'
+  loop: '{{ template_encoding_1252_encodings }}'
+
+- name: Compare the encoding_1252_* templated files to known good
+  command: diff -u {{ output_dir }}/encoding_1252_{{ item }}.expected {{ output_dir }}/encoding_1252_{{ item }}.txt
+  register: encoding_1252_diff_result
+  loop: '{{ template_encoding_1252_encodings }}'
+
+- name: Check that nested undefined values return Undefined
+  vars:
+    dict_var:
+      bar: {}
+    list_var:
+      - foo: {}
+  assert:
+    that:
+      - dict_var is defined
+      - dict_var.bar is defined
+      - dict_var.bar.baz is not defined
+      - dict_var.bar.baz | default('DEFAULT') == 'DEFAULT'
+      - dict_var.bar.baz.abc is not defined
+      - dict_var.bar.baz.abc | default('DEFAULT') == 'DEFAULT'
+      - dict_var.baz is not defined
+      - dict_var.baz.abc is not defined
+      - dict_var.baz.abc | default('DEFAULT') == 'DEFAULT'
+      - list_var.0 is defined
+      - list_var.1 is not defined
+      - list_var.0.foo is defined
+      - list_var.0.foo.bar is not defined
+      - list_var.0.foo.bar | default('DEFAULT') == 'DEFAULT'
+      - list_var.1.foo is not defined
+      - list_var.1.foo | default('DEFAULT') == 'DEFAULT'
+      - dict_var is defined
+      - dict_var['bar'] is defined
+      - dict_var['bar']['baz'] is not defined
+      - dict_var['bar']['baz'] | default('DEFAULT') == 'DEFAULT'
+      - dict_var['bar']['baz']['abc'] is not defined
+      - dict_var['bar']['baz']['abc'] | default('DEFAULT') == 'DEFAULT'
+      - dict_var['baz'] is not defined
+      - dict_var['baz']['abc'] is not defined
+      - dict_var['baz']['abc'] | default('DEFAULT') == 'DEFAULT'
+      - list_var[0] is defined
+      - list_var[1] is not defined
+      - list_var[0]['foo'] is defined
+      - list_var[0]['foo']['bar'] is not defined
+      - list_var[0]['foo']['bar'] | default('DEFAULT') == 'DEFAULT'
+      - list_var[1]['foo'] is not defined
+      - list_var[1]['foo'] | default('DEFAULT') == 'DEFAULT'
+      - dict_var['bar'].baz is not defined
+      - dict_var['bar'].baz | default('DEFAULT') == 'DEFAULT'
+
+- template:
+    src: template_destpath_test.j2
+    dest: "{{ output_dir }}/template_destpath.templated"
+
+- copy:
+    content: "{{ output_dir}}/template_destpath.templated\n"
+    dest: "{{ output_dir }}/template_destpath.expected"
+
+- name: compare templated file to known good template_destpath
+  shell: diff -uw {{output_dir}}/template_destpath.templated {{output_dir}}/template_destpath.expected
+  register: diff_result
+
+- name: verify templated template_destpath matches known good
+  assert:
+    that:
+        - 'diff_result.stdout == ""'
+        - "diff_result.rc == 0"
+
+- debug:
+    msg: "{{ 'x' in y }}"
+  ignore_errors: yes
+  register: error
+
+- name: check that proper error message is emitted when in operator is used
+  assert:
+    that: "\"'y' is undefined\" in error.msg"
 
 # aliases file requires root for template tests so this should be safe
 - include: backup_test.yml

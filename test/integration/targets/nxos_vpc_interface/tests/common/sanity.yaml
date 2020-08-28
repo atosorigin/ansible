@@ -7,8 +7,8 @@
   - name: enable feature vpc
     nxos_feature:
       feature: vpc
-      state: enabled
       provider: "{{ connection }}"
+      state: enabled
 
   - name: create port-channel10
     nxos_config:
@@ -28,6 +28,7 @@
 
   - name: configure vpc
     nxos_vpc:
+      provider: "{{ connection }}"
       state: present
       domain: 100
       role_priority: 32667
@@ -36,7 +37,6 @@
       pkl_src: 10.1.100.20
       peer_gw: true
       auto_recovery: false
-      provider: "{{ connection }}"
 
   - name: Configure vpc port channel
     nxos_vpc_interface: &conf
@@ -57,20 +57,27 @@
       that:
         - "result.changed == false"
 
+# The vpc peer-link command seems to be invalid for the NXOSv we have in Zuul CI
+# Hence, we're temporarily skipping the tests that have `peer_link` key
+
   - name: Configure vpc port channel
     nxos_vpc_interface: &conf1
       portchannel: 11
       peer_link: True
       provider: "{{ connection }}"
     register: result
+    when: image_version != "7.0(3)I5(1)"
 
   - assert: *true
+    when: image_version != "7.0(3)I5(1)"
 
   - name: "Conf Idempotence"
     nxos_vpc_interface: *conf1
     register: result
+    when: image_version != "7.0(3)I5(1)"
 
   - assert: *false
+    when: image_version != "7.0(3)I5(1)"
 
   - name: Configure vpc port channel
     nxos_vpc_interface: &conf2
@@ -78,21 +85,25 @@
       peer_link: False
       provider: "{{ connection }}"
     register: result
+    when: image_version != "7.0(3)I5(1)"
 
   - assert: *true
+    when: image_version != "7.0(3)I5(1)"
 
   - name: "Conf Idempotence"
     nxos_vpc_interface: *conf2
     register: result
+    when: image_version != "7.0(3)I5(1)"
 
   - assert: *false
+    when: image_version != "7.0(3)I5(1)"
 
   - name: remove vpc port channel
     nxos_vpc_interface: &remove
       portchannel: 10
       vpc: 10
-      state: absent
       provider: "{{ connection }}"
+      state: absent
     register: result
 
   - assert: *true
@@ -106,6 +117,7 @@
   always:
   - name: remove vpc
     nxos_vpc:
+      provider: "{{ connection }}"
       state: absent
       domain: 100
       role_priority: 32667
@@ -114,15 +126,14 @@
       pkl_src: 10.1.100.20
       peer_gw: true
       auto_recovery: false
-      provider: "{{ connection }}"
     ignore_errors: yes
 
   - name: remove vpc port channel
     nxos_vpc_interface:
       portchannel: 10
       vpc: 10
-      state: absent
       provider: "{{ connection }}"
+      state: absent
     ignore_errors: yes
 
   - name: remove port channel
@@ -137,7 +148,7 @@
   - name: disable feature vpc
     nxos_feature:
       feature: vpc
-      state: disabled
       provider: "{{ connection }}"
+      state: disabled
 
 - debug: msg="END connection={{ ansible_connection }} nxos_vpc_interface sanity test"

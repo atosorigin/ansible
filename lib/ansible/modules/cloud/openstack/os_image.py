@@ -27,12 +27,12 @@ description:
 options:
    name:
      description:
-        - Name that has to be given to the image
+        - The name of the image when uploading - or the name/ID of the image if deleting
      required: true
    id:
      version_added: "2.4"
      description:
-        - The Id of the image
+        - The ID of the image when uploading an image
    checksum:
      version_added: "2.5"
      description:
@@ -59,6 +59,12 @@ options:
         - Whether the image can be accessed publicly. Note that publicizing an image requires admin role by default.
      type: bool
      default: 'yes'
+   protected:
+     version_added: "2.9"
+     description:
+        - Prevent image from being deleted
+     type: bool
+     default: 'no'
    filename:
      description:
         - The path to the file which has to be uploaded
@@ -80,7 +86,7 @@ options:
    availability_zone:
      description:
        - Ignored. Present for backwards compatibility
-requirements: ["shade"]
+requirements: ["openstacksdk"]
 '''
 
 EXAMPLES = '''
@@ -91,6 +97,8 @@ EXAMPLES = '''
       username: admin
       password: passme
       project_name: admin
+      os_user_domain_name: Default
+      os_project_domain_name: Default
     name: cirros
     container_format: bare
     disk_format: qcow2
@@ -119,6 +127,7 @@ def main():
         min_disk=dict(type='int', default=0),
         min_ram=dict(type='int', default=0),
         is_public=dict(type='bool', default=False),
+        protected=dict(type='bool', default=False),
         filename=dict(default=None),
         ramdisk=dict(default=None),
         kernel=dict(default=None),
@@ -128,7 +137,7 @@ def main():
     module_kwargs = openstack_module_kwargs()
     module = AnsibleModule(argument_spec, **module_kwargs)
 
-    shade, cloud = openstack_cloud_from_module(module)
+    sdk, cloud = openstack_cloud_from_module(module)
     try:
 
         changed = False
@@ -150,6 +159,7 @@ def main():
                     wait=module.params['wait'],
                     timeout=module.params['timeout'],
                     is_public=module.params['is_public'],
+                    protected=module.params['protected'],
                     min_disk=module.params['min_disk'],
                     min_ram=module.params['min_ram'],
                     **kwargs
@@ -162,6 +172,7 @@ def main():
                 image=image,
                 kernel=module.params['kernel'],
                 ramdisk=module.params['ramdisk'],
+                protected=module.params['protected'],
                 **module.params['properties'])
             image = cloud.get_image(name_or_id=image.id)
             module.exit_json(changed=changed, image=image, id=image.id)
@@ -177,7 +188,7 @@ def main():
                 changed = True
             module.exit_json(changed=changed)
 
-    except shade.OpenStackCloudException as e:
+    except sdk.exceptions.OpenStackCloudException as e:
         module.fail_json(msg=str(e), extra_data=e.extra_data)
 
 

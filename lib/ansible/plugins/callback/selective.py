@@ -26,7 +26,7 @@ DOCUMENTATION = """
           - name: ANSIBLE_SELECTIVE_DONT_COLORIZE
         ini:
           - section: defaults
-          - key: nocolor
+            key: nocolor
         type: boolean
 """
 
@@ -202,7 +202,7 @@ class CallbackModule(CallbackBase):
                                      )
             if 'results' in result._result:
                 for r in result._result['results']:
-                    failed = 'failed' in r
+                    failed = 'failed' in r and r['failed']
 
                     stderr = [r.get('exception', None), r.get('module_stderr', None)]
                     stderr = "\n".join([e for e in stderr if e]).strip()
@@ -237,8 +237,8 @@ class CallbackModule(CallbackBase):
             else:
                 color = 'ok'
 
-            msg = '{0}    : ok={1}\tchanged={2}\tfailed={3}\tunreachable={4}'.format(
-                host, s['ok'], s['changed'], s['failures'], s['unreachable'])
+            msg = '{0}    : ok={1}\tchanged={2}\tfailed={3}\tunreachable={4}\trescued={5}\tignored={6}'.format(
+                host, s['ok'], s['changed'], s['failures'], s['unreachable'], s['rescued'], s['ignored'])
             print(colorize(msg, color))
 
     def v2_runner_on_skipped(self, result, **kwargs):

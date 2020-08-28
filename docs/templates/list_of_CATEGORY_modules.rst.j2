@@ -1,3 +1,6 @@
+{# avoids rST "isn't included in any toctree" errors for module docs #}
+:orphan:
+
 .. _@{ title.lower() + '_' + plugin_type + 's' }@:
 
 @{ title }@ @{ plugin_type + 's' }@
@@ -11,7 +14,7 @@
 {% if category['_modules'] %}
 
 {% for module in category['_modules'] | sort %}
-  * :ref:`@{ module }@`{% if module_info[module]['deprecated'] %} **(D)**{% endif%} 
+  * :ref:`@{ module }@_@{ plugin_type }@`{% if module_info[module]['deprecated'] %} **(D)**{% endif%} 
 {% endfor %}
 {% endif %}
 
@@ -25,7 +28,7 @@
 
 
 {% for module in info['_modules'] | sort %}
-  * :ref:`@{ module }@`{% if module_info[module]['deprecated'] %} **(D)**{% endif%} 
+  * :ref:`@{ module }@_@{ plugin_type }@`{% if module_info[module]['deprecated'] %} **(D)**{% endif%} 
 {% endfor %}
 
 {% endfor %}

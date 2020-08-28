@@ -3,16 +3,35 @@
 
 import sys
 from collections import namedtuple
-import rpmfluff
 
+try:
+    from rpmfluff import SimpleRpmBuild
+    from rpmfluff import YumRepoBuild
+except ImportError:
+    from rpmfluff.rpmbuild import SimpleRpmBuild
+    from rpmfluff.yumrepobuild import YumRepoBuild
 
-RPM = namedtuple('RPM', ['name', 'version', 'release', 'epoch'])
+try:
+    from rpmfluff import can_use_rpm_weak_deps
+except ImportError:
+    try:
+        from rpmfluff.utils import can_use_rpm_weak_deps
+    except ImportError:
+        can_use_rpm_weak_deps = None
+
+RPM = namedtuple('RPM', ['name', 'version', 'release', 'epoch', 'recommends'])
 
 
 SPECS = [
-    RPM('foo', '1.0', '1', None),
-    RPM('foo', '1.0', '2', '1'),
-    RPM('foo', '1.1', '1', '1'),
+    RPM('dinginessentail', '1.0', '1', None, None),
+    RPM('dinginessentail', '1.0', '2', '1', None),
+    RPM('dinginessentail', '1.1', '1', '1', None),
+    RPM('dinginessentail-olive', '1.0', '1', None, None),
+    RPM('dinginessentail-olive', '1.1', '1', None, None),
+    RPM('landsidescalping', '1.0', '1', None, None),
+    RPM('landsidescalping', '1.1', '1', None, None),
+    RPM('dinginessentail-with-weak-dep', '1.0', '1', None, ['dinginessentail-weak-dep']),
+    RPM('dinginessentail-weak-dep', '1.0', '1', None, None),
 ]
 
 
@@ -24,11 +43,20 @@ def main():
 
     pkgs = []
     for spec in SPECS:
-        pkg = rpmfluff.SimpleRpmBuild(spec.name, spec.version, spec.release, [arch])
+        pkg = SimpleRpmBuild(spec.name, spec.version, spec.release, [arch])
         pkg.epoch = spec.epoch
+
+        if spec.recommends:
+            # Skip packages that require weak deps but an older version of RPM is being used
+            if not can_use_rpm_weak_deps or not can_use_rpm_weak_deps():
+                continue
+
+            for recommend in spec.recommends:
+                pkg.add_recommends(recommend)
+
         pkgs.append(pkg)
 
-    repo = rpmfluff.YumRepoBuild(pkgs)
+    repo = YumRepoBuild(pkgs)
     repo.make(arch)
 
     for pkg in pkgs:

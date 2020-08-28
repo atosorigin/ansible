@@ -1,2 +1,4 @@
 cloud/azure
+unsupported
 destructive
+azure_rm_virtualmachine_facts

@@ -44,7 +44,7 @@ options:
   api_url:
     description:
       - Custom API URL. Overrides the
-        ONEANDONE_API_URL environement variable.
+        ONEANDONE_API_URL environment variable.
     required: false
   name:
     description:
@@ -87,7 +87,7 @@ options:
       - wait for the instance to be in state 'running' before returning
     required: false
     default: "yes"
-    choices: [ "yes", "no" ]
+    type: bool
   wait_timeout:
     description:
       - how long before wait gives up, in seconds

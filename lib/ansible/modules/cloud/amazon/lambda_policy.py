@@ -15,7 +15,7 @@ description:
     - This module allows the management of AWS Lambda policy statements.
       It is idempotent and supports "Check" mode.  Use module M(lambda) to manage the lambda
       function itself, M(lambda_alias) to manage function aliases, M(lambda_event) to manage event source mappings
-      such as Kinesis streams, M(execute_lambda) to execute a lambda function and M(lambda_facts) to gather facts
+      such as Kinesis streams, M(execute_lambda) to execute a lambda function and M(lambda_info) to gather information
       relating to one or more lambda functions.
 
 version_added: "2.4"
@@ -37,7 +37,6 @@ options:
   state:
     description:
       - Describes the desired state.
-    required: true
     default: "present"
     choices: ["present", "absent"]
 
@@ -112,9 +111,11 @@ EXAMPLES = '''
       principal: s3.amazonaws.com
       source_arn: arn:aws:s3:eu-central-1:123456789012:bucketName
       source_account: 123456789012
+    register: lambda_policy_action
 
   - name: show results
-    debug: var=lambda_policy_action
+    debug:
+      var: lambda_policy_action
 
 '''
 
@@ -123,7 +124,7 @@ RETURN = '''
 lambda_policy_action:
     description: describes what action was taken
     returned: success
-    type: string
+    type: str
 '''
 
 import json
@@ -134,7 +135,7 @@ from ansible.module_utils.ec2 import get_aws_connection_info, boto3_conn
 
 try:
     from botocore.exceptions import ClientError
-except:
+except Exception:
     pass  # will be protected by AnsibleAWSModule
 
 
@@ -188,6 +189,13 @@ def validate_params(module):
 
     # validate function name
     if function_name.startswith('arn:'):
+        if not re.search(r'^[\w\-:]+$', function_name):
+            module.fail_json(
+                msg='ARN {0} is invalid. ARNs must contain only alphanumeric characters, hyphens and colons.'.format(function_name)
+            )
+        if len(function_name) > 140:
+            module.fail_json(msg='ARN name "{0}" exceeds 140 character limit'.format(function_name))
+    else:
         if not re.search(r'^[\w\-]+$', function_name):
             module.fail_json(
                 msg='Function name {0} is invalid. Names must contain only alphanumeric characters and hyphens.'.format(
@@ -196,13 +204,6 @@ def validate_params(module):
         if len(function_name) > 64:
             module.fail_json(
                 msg='Function name "{0}" exceeds 64 character limit'.format(function_name))
-    else:
-        if not re.search(r'^[\w\-:]+$', function_name):
-            module.fail_json(
-                msg='ARN {0} is invalid. ARNs must contain only alphanumeric characters, hyphens and colons.'.format(function_name)
-            )
-        if len(function_name) > 140:
-            module.fail_json(msg='ARN name "{0}" exceeds 140 character limit'.format(function_name))
 
 
 def get_qualifier(module):
@@ -236,7 +237,14 @@ def extract_statement(policy, sid):
     for statement in policy['Statement']:
         if statement['Sid'] == sid:
             policy_statement['action'] = statement['Action']
-            policy_statement['principal'] = statement['Principal']['Service']
+            try:
+                policy_statement['principal'] = statement['Principal']['Service']
+            except KeyError:
+                pass
+            try:
+                policy_statement['principal'] = statement['Principal']['AWS']
+            except KeyError:
+                pass
             try:
                 policy_statement['source_arn'] = statement['Condition']['ArnLike']['AWS:SourceArn']
             except KeyError:
@@ -261,8 +269,6 @@ def get_policy_statement(module, client):
     :param client:
     :return:
     """
-
-    policy = dict()
     sid = module.params['statement_id']
 
     # set API parameters

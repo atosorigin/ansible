@@ -5,15 +5,15 @@
 from __future__ import (absolute_import, print_function)
 
 import argparse
+import json
 import os
-import requests
 import sqlite3
 import sys
 
 DATABASE_PATH = os.path.expanduser('~/.ansible/report.db')
 BASE_PATH = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')) + '/'
 ANSIBLE_PATH = os.path.join(BASE_PATH, 'lib')
-ANSIBLE_TEST_PATH = os.path.join(BASE_PATH, 'test/runner')
+ANSIBLE_TEST_PATH = os.path.join(BASE_PATH, 'test/lib')
 
 if ANSIBLE_PATH not in sys.path:
     sys.path.insert(0, ANSIBLE_PATH)
@@ -21,8 +21,10 @@ if ANSIBLE_PATH not in sys.path:
 if ANSIBLE_TEST_PATH not in sys.path:
     sys.path.insert(0, ANSIBLE_TEST_PATH)
 
+from ansible.module_utils.urls import open_url
 from ansible.parsing.metadata import extract_metadata
-from lib.target import walk_integration_targets
+
+from ansible_test._internal.target import walk_integration_targets
 
 
 def main():
@@ -139,8 +141,8 @@ def populate_modules():
 
 
 def populate_coverage():
-    response = requests.get('https://codecov.io/api/gh/ansible/ansible/tree/devel/?src=extension')
-    data = response.json()
+    response = open_url('https://codecov.io/api/gh/ansible/ansible/tree/devel/?src=extension')
+    data = json.load(response)
     files = data['commit']['report']['files']
     coverage_rows = []
 

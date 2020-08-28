@@ -69,7 +69,28 @@ options:
    availability_zone:
      description:
        - Ignored. Present for backwards compatibility
-requirements: ["shade"]
+   port_security_enabled:
+     description:
+        -  Whether port security is enabled on the network or not.
+           Network will use OpenStack defaults if this option is
+           not utilised. Requires openstacksdk>=0.18.
+     type: bool
+     version_added: "2.8"
+   mtu:
+     description:
+       -  The maximum transmission unit (MTU) value to address fragmentation.
+          Network will use OpenStack defaults if this option is
+          not provided. Requires openstacksdk>=0.18.
+     type: int
+     version_added: "2.9"
+   dns_domain:
+     description:
+       -  The DNS domain value to set.
+          Network will use Openstack defaults if this option is
+          not provided.
+     version_added: "2.9"
+requirements:
+     - "openstacksdk"
 '''
 
 EXAMPLES = '''
@@ -89,11 +110,11 @@ network:
     contains:
         id:
             description: Network ID.
-            type: string
+            type: str
             sample: "4bb4f9a5-3bd2-4562-bf6a-d17a6341bb56"
         name:
             description: Network name.
-            type: string
+            type: str
             sample: "ext_network"
         shared:
             description: Indicates whether this network is shared across all tenants.
@@ -101,12 +122,16 @@ network:
             sample: false
         status:
             description: Network status.
-            type: string
+            type: str
             sample: "ACTIVE"
         mtu:
             description: The MTU of a network resource.
-            type: integer
+            type: int
             sample: 0
+        dns_domain:
+            description: The DNS domain of a network resource. Requires openstacksdk>=0.29.
+            type: str
+            sample: "sample.openstack.org."
         admin_state_up:
             description: The administrative state of the network.
             type: bool
@@ -121,7 +146,7 @@ network:
             sample: true
         tenant_id:
             description: The tenant ID.
-            type: string
+            type: str
             sample: "06820f94b9f54b119636be2728d216fc"
         subnets:
             description: The associated subnets.
@@ -129,15 +154,15 @@ network:
             sample: []
         "provider:physical_network":
             description: The physical network where this network object is implemented.
-            type: string
+            type: str
             sample: my_vlan_net
         "provider:network_type":
             description: The type of physical network that maps to this network resource.
-            type: string
+            type: str
             sample: vlan
         "provider:segmentation_id":
             description: An isolated segment on the physical network.
-            type: string
+            type: str
             sample: 101
 '''
 
@@ -153,9 +178,12 @@ def main():
         external=dict(default=False, type='bool'),
         provider_physical_network=dict(required=False),
         provider_network_type=dict(required=False),
-        provider_segmentation_id=dict(required=False),
+        provider_segmentation_id=dict(required=False, type='int'),
         state=dict(default='present', choices=['absent', 'present']),
-        project=dict(default=None)
+        project=dict(default=None),
+        port_security_enabled=dict(type='bool'),
+        mtu=dict(required=False, type='int'),
+        dns_domain=dict(required=False)
     )
 
     module_kwargs = openstack_module_kwargs()
@@ -169,9 +197,24 @@ def main():
     provider_physical_network = module.params['provider_physical_network']
     provider_network_type = module.params['provider_network_type']
     provider_segmentation_id = module.params['provider_segmentation_id']
-    project = module.params.get('project')
+    project = module.params['project']
 
-    shade, cloud = openstack_cloud_from_module(module, min_version='1.6.0')
+    net_create_kwargs = {}
+    min_version = None
+
+    if module.params['mtu'] is not None:
+        min_version = '0.18.0'
+        net_create_kwargs['mtu_size'] = module.params['mtu']
+
+    if module.params['port_security_enabled'] is not None:
+        min_version = '0.18.0'
+        net_create_kwargs['port_security_enabled'] = module.params['port_security_enabled']
+
+    if module.params['dns_domain'] is not None:
+        min_version = '0.29.0'
+        net_create_kwargs['dns_domain'] = module.params['dns_domain']
+
+    sdk, cloud = openstack_cloud_from_module(module, min_version)
     try:
         if project is not None:
             proj = cloud.get_project(project)
@@ -196,10 +239,12 @@ def main():
 
                 if project_id is not None:
                     net = cloud.create_network(name, shared, admin_state_up,
-                                               external, provider, project_id)
+                                               external, provider, project_id,
+                                               **net_create_kwargs)
                 else:
                     net = cloud.create_network(name, shared, admin_state_up,
-                                               external, provider)
+                                               external, provider,
+                                               **net_create_kwargs)
                 changed = True
             else:
                 changed = False
@@ -212,7 +257,7 @@ def main():
                 cloud.delete_network(name)
                 module.exit_json(changed=True)
 
-    except shade.OpenStackCloudException as e:
+    except sdk.exceptions.OpenStackCloudException as e:
         module.fail_json(msg=str(e))
 
 

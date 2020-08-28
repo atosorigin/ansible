@@ -136,7 +136,7 @@ EXAMPLES = '''
       - Ethernet2/3
       - Ethernet2/5
 
-- name: Check interfaces assigend to VRF
+- name: Check interfaces assigned to VRF
   nxos_vrf:
     name: test1
     associated_interfaces:
@@ -175,7 +175,7 @@ from copy import deepcopy
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.network.nxos.nxos import load_config, run_commands
-from ansible.module_utils.network.nxos.nxos import nxos_argument_spec
+from ansible.module_utils.network.nxos.nxos import nxos_argument_spec, get_interface_type
 from ansible.module_utils.network.common.utils import remove_default_spec
 
 
@@ -237,11 +237,13 @@ def map_obj_to_commands(updates, module):
         admin_state = w['admin_state']
         vni = w['vni']
         interfaces = w.get('interfaces') or []
-        state = w['state']
+        if purge:
+            state = "absent"
+        else:
+            state = w['state']
         del w['state']
 
         obj_in_have = search_obj_in_list(name, have)
-
         if state == 'absent' and obj_in_have:
             commands.append('no vrf context {0}'.format(name))
 
@@ -262,7 +264,8 @@ def map_obj_to_commands(updates, module):
                 if interfaces and interfaces[0] != 'default':
                     for i in interfaces:
                         commands.append('interface {0}'.format(i))
-                        commands.append('no switchport')
+                        if get_interface_type(i) in ('ethernet', 'portchannel'):
+                            commands.append('no switchport')
                         commands.append('vrf member {0}'.format(name))
 
             else:
@@ -296,7 +299,8 @@ def map_obj_to_commands(updates, module):
                             commands.append('vrf context {0}'.format(name))
                             commands.append('exit')
                             commands.append('interface {0}'.format(i))
-                            commands.append('no switchport')
+                            if get_interface_type(i) in ('ethernet', 'portchannel'):
+                                commands.append('no switchport')
                             commands.append('vrf member {0}'.format(name))
 
                     elif set(interfaces) != set(obj_in_have['interfaces']):
@@ -305,7 +309,8 @@ def map_obj_to_commands(updates, module):
                             commands.append('vrf context {0}'.format(name))
                             commands.append('exit')
                             commands.append('interface {0}'.format(i))
-                            commands.append('no switchport')
+                            if get_interface_type(i) in ('ethernet', 'portchannel'):
+                                commands.append('no switchport')
                             commands.append('vrf member {0}'.format(name))
 
                         superfluous_interfaces = list(set(obj_in_have['interfaces']) - set(interfaces))
@@ -313,7 +318,8 @@ def map_obj_to_commands(updates, module):
                             commands.append('vrf context {0}'.format(name))
                             commands.append('exit')
                             commands.append('interface {0}'.format(i))
-                            commands.append('no switchport')
+                            if get_interface_type(i) in ('ethernet', 'portchannel'):
+                                commands.append('no switchport')
                             commands.append('no vrf member {0}'.format(name))
                 elif interfaces and interfaces[0] == 'default':
                     if obj_in_have['interfaces']:
@@ -321,7 +327,8 @@ def map_obj_to_commands(updates, module):
                             commands.append('vrf context {0}'.format(name))
                             commands.append('exit')
                             commands.append('interface {0}'.format(i))
-                            commands.append('no switchport')
+                            if get_interface_type(i) in ('ethernet', 'portchannel'):
+                                commands.append('no switchport')
                             commands.append('no vrf member {0}'.format(name))
 
     if purge:
@@ -339,12 +346,14 @@ def map_obj_to_commands(updates, module):
 
 
 def validate_vrf(name, module):
-    if name == 'default':
-        module.fail_json(msg='cannot use default as name of a VRF')
-    elif len(name) > 32:
-        module.fail_json(msg='VRF name exceeded max length of 32', name=name)
-    else:
-        return name
+    if name:
+        name = name.strip()
+        if name == 'default':
+            module.fail_json(msg='cannot use default as name of a VRF')
+        elif len(name) > 32:
+            module.fail_json(msg='VRF name exceeded max length of 32', name=name)
+        else:
+            return name
 
 
 def map_params_to_obj(module):
@@ -456,15 +465,15 @@ def main():
     """ main entry point for module execution
     """
     element_spec = dict(
-        name=dict(aliases=['vrf']),
-        description=dict(),
-        vni=dict(type=str),
-        rd=dict(type=str),
-        admin_state=dict(default='up', choices=['up', 'down']),
+        name=dict(type='str', aliases=['vrf']),
+        description=dict(type='str'),
+        vni=dict(type='str'),
+        rd=dict(type='str'),
+        admin_state=dict(type='str', default='up', choices=['up', 'down']),
         interfaces=dict(type='list'),
         associated_interfaces=dict(type='list'),
-        delay=dict(default=10, type='int'),
-        state=dict(default='present', choices=['present', 'absent'])
+        delay=dict(type='int', default=10),
+        state=dict(type='str', default='present', choices=['present', 'absent']),
     )
 
     aggregate_spec = deepcopy(element_spec)
@@ -474,7 +483,7 @@ def main():
 
     argument_spec = dict(
         aggregate=dict(type='list', elements='dict', options=aggregate_spec),
-        purge=dict(default=False, type='bool')
+        purge=dict(type='bool', default=False),
     )
 
     argument_spec.update(element_spec)

@@ -29,7 +29,7 @@ DOCUMENTATION = '''
         ini:
           - section: callback_foreman
             key: url
-      ssl_cert:
+      client_cert:
         description: X509 certificate to authenticate to Foreman if https is used
         env:
             - name: FOREMAN_SSL_CERT
@@ -37,7 +37,10 @@ DOCUMENTATION = '''
         ini:
           - section: callback_foreman
             key: ssl_cert
-      ssl_key:
+          - section: callback_foreman
+            key: client_cert
+        aliases: [ ssl_cert ]
+      client_key:
         description: the corresponding private key
         env:
           - name: FOREMAN_SSL_KEY
@@ -45,9 +48,12 @@ DOCUMENTATION = '''
         ini:
           - section: callback_foreman
             key: ssl_key
+          - section: callback_foreman
+            key: client_key
+        aliases: [ ssl_key ]
       verify_certs:
         description:
-          - Toggle to decidewhether to verify the Foreman certificate.
+          - Toggle to decide whether to verify the Foreman certificate.
           - It can be set to '1' to verify SSL certificates using the installed CAs or to a path pointing to a CA bundle.
           - Set to '0' to disable certificate checking.
         env:
@@ -70,6 +76,7 @@ try:
 except ImportError:
     HAS_REQUESTS = False
 
+from ansible.module_utils._text import to_text
 from ansible.plugins.callback import CallbackBase
 
 
@@ -94,15 +101,15 @@ class CallbackModule(CallbackBase):
 
         super(CallbackModule, self).set_options(task_keys=task_keys, var_options=var_options, direct=direct)
 
-        self.FOREMAN_URL = self._plugin_options['url']
-        self.FOREMAN_SSL_CERT = (self._plugin_options['ssl_cert'], self._plugin_options['ssl_key'])
-        self.FOREMAN_SSL_VERIFY = self._plugin_options['verify_certs']
+        self.FOREMAN_URL = self.get_option('url')
+        self.FOREMAN_SSL_CERT = (self.get_option('client_cert'), self.get_option('client_key'))
+        self.FOREMAN_SSL_VERIFY = str(self.get_option('verify_certs'))
+
+        self.ssl_verify = self._ssl_verify()
 
         if HAS_REQUESTS:
             requests_major = int(requests.__version__.split('.')[0])
-            if requests_major >= 2:
-                self.ssl_verify = self._ssl_verify()
-            else:
+            if requests_major < 2:
                 self._disable_plugin('The `requests` python module is too old.')
         else:
             self._disable_plugin('The `requests` python module is not installed.')
@@ -116,7 +123,10 @@ class CallbackModule(CallbackBase):
 
     def _disable_plugin(self, msg):
         self.disabled = True
-        self._display.warning(msg + ' Disabling the Foreman callback plugin.')
+        if msg:
+            self._display.warning(msg + ' Disabling the Foreman callback plugin.')
+        else:
+            self._display.warning('Disabling the Foreman callback plugin.')
 
     def _ssl_verify(self):
         if self.FOREMAN_SSL_VERIFY.lower() in ["1", "true", "on"]:
@@ -149,7 +159,7 @@ class CallbackModule(CallbackBase):
                               verify=self.ssl_verify)
             r.raise_for_status()
         except requests.exceptions.RequestException as err:
-            print(str(err))
+            print(to_text(err))
 
     def _build_log(self, data):
         logs = []
@@ -157,8 +167,10 @@ class CallbackModule(CallbackBase):
             source, msg = entry
             if 'failed' in msg:
                 level = 'err'
+            elif 'changed' in msg and msg['changed']:
+                level = 'notice'
             else:
-                level = 'notice' if 'changed' in msg and msg['changed'] else 'info'
+                level = 'info'
             logs.append({
                 "log": {
                     'sources': {
@@ -209,7 +221,7 @@ class CallbackModule(CallbackBase):
                                   verify=self.ssl_verify)
                 r.raise_for_status()
             except requests.exceptions.RequestException as err:
-                print(str(err))
+                print(to_text(err))
             self.items[host] = []
 
     def append_result(self, result):

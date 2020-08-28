@@ -1,24 +1,23 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-# (c) 2016, Peter Sagerson <psagers@ignorare.net>
-# (c) 2016, Jiri Tyr <jiri.tyr@gmail.com>
-#
+# Copyright: (c) 2016, Peter Sagerson <psagers@ignorare.net>
+# Copyright: (c) 2016, Jiri Tyr <jiri.tyr@gmail.com>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
+ANSIBLE_METADATA = {
+    'metadata_version': '1.1',
+    'status': ['preview'],
+    'supported_by': 'community'
+}
 
-ANSIBLE_METADATA = {'metadata_version': '1.1',
-                    'status': ['preview'],
-                    'supported_by': 'community'}
-
-
-DOCUMENTATION = """
+DOCUMENTATION = r'''
 ---
 module: ldap_attr
-short_description: Add or remove LDAP attribute values.
+short_description: Add or remove LDAP attribute values
 description:
   - Add or remove LDAP attribute values.
 notes:
@@ -36,66 +35,41 @@ notes:
     rules. This should work out in most cases, but it is theoretically
     possible to see spurious changes when target and actual values are
     semantically identical but lexically distinct.
+  - "The I(params) parameter is deprecated in Ansible-2.7 due to circumventing Ansible's parameter
+     handling. The I(params) parameter started disallowing setting the I(bind_pw) parameter in Ansible-2.7
+     as it was insecure to set the parameter that way."
 version_added: '2.3'
 author:
   - Jiri Tyr (@jtyr)
 requirements:
   - python-ldap
 options:
-  bind_dn:
-    description:
-      - A DN to bind with. If this is omitted, we'll try a SASL bind with
-        the EXTERNAL mechanism. If this is blank, we'll use an anonymous
-        bind.
-  bind_pw:
-    description:
-      - The password to use with I(bind_dn).
-  dn:
-    description:
-      - The DN of the entry to modify.
-    required: true
   name:
     description:
       - The name of the attribute to modify.
+    type: str
     required: true
-  server_uri:
-    description:
-      - A URI to the LDAP server. The default value lets the underlying
-        LDAP client library look for a UNIX domain socket in its default
-        location.
-    default: ldapi:///
-  start_tls:
-    description:
-      - If true, we'll use the START_TLS LDAP extension.
-    type: bool
-    default: 'no'
   state:
     description:
-      - The state of the attribute values. If C(present), all given
-        values will be added if they're missing. If C(absent), all given
-        values will be removed if present. If C(exact), the set of values
-        will be forced to exactly those provided and no others. If
-        I(state=exact) and I(value) is empty, all values for this
-        attribute will be removed.
-    choices: [present, absent, exact]
+      - The state of the attribute values.
+      - If C(present), all given values will be added if they're missing.
+      - If C(absent), all given values will be removed if present.
+      - If C(exact), the set of values will be forced to exactly those provided and no others.
+      - If I(state=exact) and I(value) is an empty list, all values for this attribute will be removed.
+    choices: [ absent, exact, present ]
     default: present
   values:
     description:
       - The value(s) to add or remove. This can be a string or a list of
         strings. The complex argument format is required in order to pass
         a list of strings (see examples).
+    type: raw
     required: true
-  validate_certs:
-    description:
-      - If C(no), SSL certificates will not be validated. This should only be
-        used on sites using self-signed certificates.
-    type: bool
-    default: 'yes'
-    version_added: "2.4"
-"""
+extends_documentation_fragment:
+- ldap.documentation
+'''
 
-
-EXAMPLES = """
+EXAMPLES = r'''
 - name: Configure directory number 1 for example.com
   ldap_attr:
     dn: olcDatabase={1}hdb,cn=config
@@ -144,7 +118,7 @@ EXAMPLES = """
   ldap_attr:
     dn: uid=jdoe,ou=people,dc=example,dc=com
     name: shadowExpire
-    values: ""
+    values: []
     state: exact
     server_uri: ldap://localhost/
     bind_dn: cn=admin,dc=example,dc=com
@@ -158,62 +132,58 @@ EXAMPLES = """
 #   server_uri: ldap://localhost/
 #   bind_dn: cn=admin,dc=example,dc=com
 #   bind_pw: password
+#
+# In the example below, 'args' is a task keyword, passed at the same level as the module
 - name: Get rid of an unneeded attribute
   ldap_attr:
     dn: uid=jdoe,ou=people,dc=example,dc=com
     name: shadowExpire
-    values: ""
+    values: []
     state: exact
-    params: "{{ ldap_auth }}"
-"""
+  args: "{{ ldap_auth }}"
+'''
 
-
-RETURN = """
+RETURN = r'''
 modlist:
   description: list of modified parameters
   returned: success
   type: list
   sample: '[[2, "olcRootDN", ["cn=root,dc=example,dc=com"]]]'
-"""
+'''
 
 import traceback
+from distutils.version import LooseVersion
 
+from ansible.module_utils.basic import AnsibleModule, missing_required_lib
+from ansible.module_utils._text import to_native, to_bytes
+from ansible.module_utils.ldap import LdapGeneric, gen_specs
+
+LDAP_IMP_ERR = None
 try:
     import ldap
-    import ldap.sasl
 
     HAS_LDAP = True
 except ImportError:
+    LDAP_IMP_ERR = traceback.format_exc()
     HAS_LDAP = False
 
-from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils._text import to_native
 
-
-class LdapAttr(object):
+class LdapAttr(LdapGeneric):
     def __init__(self, module):
+        LdapGeneric.__init__(self, module)
+
         # Shortcuts
-        self.module = module
-        self.bind_dn = self.module.params['bind_dn']
-        self.bind_pw = self.module.params['bind_pw']
-        self.dn = self.module.params['dn']
         self.name = self.module.params['name']
-        self.server_uri = self.module.params['server_uri']
-        self.start_tls = self.module.params['start_tls']
         self.state = self.module.params['state']
-        self.verify_cert = self.module.params['validate_certs']
 
         # Normalize values
         if isinstance(self.module.params['values'], list):
-            self.values = map(str, self.module.params['values'])
+            self.values = list(map(to_bytes, self.module.params['values']))
         else:
-            self.values = [str(self.module.params['values'])]
-
-        # Establish connection
-        self.connection = self._connect_to_ldap()
+            self.values = [to_bytes(self.module.params['values'])]
 
     def add(self):
-        values_to_add = filter(self._is_value_absent, self.values)
+        values_to_add = list(filter(self._is_value_absent, self.values))
 
         if len(values_to_add) > 0:
             modlist = [(ldap.MOD_ADD, self.name, values_to_add)]
@@ -223,7 +193,7 @@ class LdapAttr(object):
         return modlist
 
     def delete(self):
-        values_to_delete = filter(self._is_value_present, self.values)
+        values_to_delete = list(filter(self._is_value_present, self.values))
 
         if len(values_to_delete) > 0:
             modlist = [(ldap.MOD_DELETE, self.name, values_to_delete)]
@@ -237,9 +207,7 @@ class LdapAttr(object):
             results = self.connection.search_s(
                 self.dn, ldap.SCOPE_BASE, attrlist=[self.name])
         except ldap.LDAPError as e:
-            self.module.fail_json(
-                msg="Cannot search for attribute %s" % self.name,
-                details=to_native(e))
+            self.fail("Cannot search for attribute %s" % self.name, e)
 
         current = results[0][1].get(self.name, [])
         modlist = []
@@ -268,58 +236,44 @@ class LdapAttr(object):
         """ True if the target attribute doesn't have the given value. """
         return not self._is_value_present(value)
 
-    def _connect_to_ldap(self):
-        if not self.verify_cert:
-            ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
-
-        connection = ldap.initialize(self.server_uri)
-
-        if self.start_tls:
-            try:
-                connection.start_tls_s()
-            except ldap.LDAPError as e:
-                self.module.fail_json(msg="Cannot start TLS.", details=to_native(e))
-
-        try:
-            if self.bind_dn is not None:
-                connection.simple_bind_s(self.bind_dn, self.bind_pw)
-            else:
-                connection.sasl_interactive_bind_s('', ldap.sasl.external())
-        except ldap.LDAPError as e:
-            self.module.fail_json(
-                msg="Cannot bind to the server.", details=to_native(e))
-
-        return connection
-
 
 def main():
     module = AnsibleModule(
-        argument_spec={
-            'bind_dn': dict(default=None),
-            'bind_pw': dict(default='', no_log=True),
-            'dn': dict(required=True),
-            'name': dict(required=True),
-            'params': dict(type='dict'),
-            'server_uri': dict(default='ldapi:///'),
-            'start_tls': dict(default=False, type='bool'),
-            'state': dict(
-                default='present',
-                choices=['present', 'absent', 'exact']),
-            'values': dict(required=True, type='raw'),
-            'validate_certs': dict(default=True, type='bool'),
-        },
+        argument_spec=gen_specs(
+            name=dict(type='str', required=True),
+            params=dict(type='dict'),
+            state=dict(type='str', default='present', choices=['absent', 'exact', 'present']),
+            values=dict(type='raw', required=True),
+        ),
         supports_check_mode=True,
     )
 
     if not HAS_LDAP:
-        module.fail_json(
-            msg="Missing required 'ldap' module (pip install python-ldap)")
+        module.fail_json(msg=missing_required_lib('python-ldap'),
+                         exception=LDAP_IMP_ERR)
 
-    # Update module parameters with user's parameters if defined
-    if 'params' in module.params and isinstance(module.params['params'], dict):
-        module.params.update(module.params['params'])
-        # Remove the params
-        module.params.pop('params', None)
+    # For Ansible-2.9.x and below, allow the params module parameter with a warning
+    if LooseVersion(module.ansible_version) < LooseVersion('2.10'):
+        if module.params['params']:
+            module.deprecate("The `params` option to ldap_attr will be removed in Ansible 2.10"
+                             " since it circumvents Ansible's option handling", version='2.10')
+
+            # However, the bind_pw parameter contains a password so it **must** go through the normal
+            # argument parsing even though removing it breaks backwards compat.
+            if 'bind_pw' in module.params['params']:
+                module.fail_json(msg="Using `bind_pw` with the `params` option has been disallowed since"
+                                 " it is insecure.  Use the `bind_pw` option directly.  The `params`"
+                                 " option will be removed in Ansible-2.10")
+
+            # Update module parameters with user's parameters if defined
+            module.params.update(module.params['params'])
+            # Remove params itself
+            module.params.pop('params', None)
+    else:
+        # For Ansible 2.10 and above
+        if module.params['params']:
+            module.fail_json(msg="The `params` option to ldap_attr was removed in Ansible-2.10 since"
+                             " it circumvents Ansible's option handling")
 
     # Instantiate the LdapAttr object
     ldap = LdapAttr(module)
@@ -343,8 +297,7 @@ def main():
             try:
                 ldap.connection.modify_s(ldap.dn, modlist)
             except Exception as e:
-                module.fail_json(msg="Attribute action failed.", details=to_native(e),
-                                 exception=traceback.format_exc())
+                module.fail_json(msg="Attribute action failed.", details=to_native(e))
 
     module.exit_json(changed=changed, modlist=modlist)
 

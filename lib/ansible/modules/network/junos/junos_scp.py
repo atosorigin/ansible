@@ -27,7 +27,7 @@ options:
   src:
     description:
       - The C(src) argument takes a single path, or a list of paths to be
-        transfered. The argument C(recursive) must be C(true) to transfer
+        transferred. The argument C(recursive) must be C(true) to transfer
         directories.
     required: true
   dest:
@@ -54,6 +54,7 @@ notes:
   - This module requires the netconf system service be enabled on
     the remote device being managed.
   - Tested against vMX JUNOS version 17.3R1.10.
+  - Works with C(local) connections only.
 """
 
 EXAMPLES = """

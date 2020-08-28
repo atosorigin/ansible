@@ -4,11 +4,12 @@
 # Make coding more python3-ish
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
-
 import pytest
 
+from jinja2 import Environment
+
 import ansible.plugins.filter.mathstuff as ms
-from ansible.errors import AnsibleFilterError
+from ansible.errors import AnsibleFilterError, AnsibleFilterTypeError
 
 
 UNIQUE_DATA = (([1, 3, 4, 2], sorted([1, 2, 3, 4])),
@@ -22,41 +23,43 @@ TWO_SETS_DATA = (([1, 2], [3, 4], ([], sorted([1, 2]), sorted([1, 2, 3, 4]), sor
                  (['a', 'b', 'c'], ['d', 'c', 'e'], (['c'], sorted(['a', 'b']), sorted(['a', 'b', 'd', 'e']), sorted(['a', 'b', 'c', 'e', 'd']))),
                  )
 
+env = Environment()
+
 
 @pytest.mark.parametrize('data, expected', UNIQUE_DATA)
 class TestUnique:
     def test_unhashable(self, data, expected):
-        assert sorted(ms.unique(list(data))) == expected
+        assert sorted(ms.unique(env, list(data))) == expected
 
     def test_hashable(self, data, expected):
-        assert sorted(ms.unique(tuple(data))) == expected
+        assert sorted(ms.unique(env, tuple(data))) == expected
 
 
 @pytest.mark.parametrize('dataset1, dataset2, expected', TWO_SETS_DATA)
 class TestIntersect:
     def test_unhashable(self, dataset1, dataset2, expected):
-        assert sorted(ms.intersect(list(dataset1), list(dataset2))) == expected[0]
+        assert sorted(ms.intersect(env, list(dataset1), list(dataset2))) == expected[0]
 
     def test_hashable(self, dataset1, dataset2, expected):
-        assert sorted(ms.intersect(tuple(dataset1), tuple(dataset2))) == expected[0]
+        assert sorted(ms.intersect(env, tuple(dataset1), tuple(dataset2))) == expected[0]
 
 
 @pytest.mark.parametrize('dataset1, dataset2, expected', TWO_SETS_DATA)
 class TestDifference:
     def test_unhashable(self, dataset1, dataset2, expected):
-        assert sorted(ms.difference(list(dataset1), list(dataset2))) == expected[1]
+        assert sorted(ms.difference(env, list(dataset1), list(dataset2))) == expected[1]
 
     def test_hashable(self, dataset1, dataset2, expected):
-        assert sorted(ms.difference(tuple(dataset1), tuple(dataset2))) == expected[1]
+        assert sorted(ms.difference(env, tuple(dataset1), tuple(dataset2))) == expected[1]
 
 
 @pytest.mark.parametrize('dataset1, dataset2, expected', TWO_SETS_DATA)
 class TestSymmetricDifference:
     def test_unhashable(self, dataset1, dataset2, expected):
-        assert sorted(ms.symmetric_difference(list(dataset1), list(dataset2))) == expected[2]
+        assert sorted(ms.symmetric_difference(env, list(dataset1), list(dataset2))) == expected[2]
 
     def test_hashable(self, dataset1, dataset2, expected):
-        assert sorted(ms.symmetric_difference(tuple(dataset1), tuple(dataset2))) == expected[2]
+        assert sorted(ms.symmetric_difference(env, tuple(dataset1), tuple(dataset2))) == expected[2]
 
 
 class TestMin:
@@ -75,9 +78,10 @@ class TestMax:
 
 class TestLogarithm:
     def test_log_non_number(self):
-        with pytest.raises(AnsibleFilterError, message='log() can only be used on numbers: a float is required'):
+        # Message changed in python3.6
+        with pytest.raises(AnsibleFilterTypeError, match='log\\(\\) can only be used on numbers: (a float is required|must be real number, not str)'):
             ms.logarithm('a')
-        with pytest.raises(AnsibleFilterError, message='log() can only be used on numbers: a float is required'):
+        with pytest.raises(AnsibleFilterTypeError, match='log\\(\\) can only be used on numbers: (a float is required|must be real number, not str)'):
             ms.logarithm(10, base='a')
 
     def test_log_ten(self):
@@ -93,10 +97,11 @@ class TestLogarithm:
 
 class TestPower:
     def test_power_non_number(self):
-        with pytest.raises(AnsibleFilterError, message='pow() can only be used on numbers: a float is required'):
+        # Message changed in python3.6
+        with pytest.raises(AnsibleFilterTypeError, match='pow\\(\\) can only be used on numbers: (a float is required|must be real number, not str)'):
             ms.power('a', 10)
 
-        with pytest.raises(AnsibleFilterError, message='pow() can only be used on numbers: a float is required'):
+        with pytest.raises(AnsibleFilterTypeError, match='pow\\(\\) can only be used on numbers: (a float is required|must be real number, not str)'):
             ms.power(10, 'a')
 
     def test_power_squared(self):
@@ -108,10 +113,14 @@ class TestPower:
 
 class TestInversePower:
     def test_root_non_number(self):
-        with pytest.raises(AnsibleFilterError, message='root() can only be used on numbers: a float is required'):
+        # Messages differed in python-2.6, python-2.7-3.5, and python-3.6+
+        with pytest.raises(AnsibleFilterTypeError, match="root\\(\\) can only be used on numbers:"
+                           " (invalid literal for float\\(\\): a"
+                           "|could not convert string to float: a"
+                           "|could not convert string to float: 'a')"):
             ms.inversepower(10, 'a')
 
-        with pytest.raises(AnsibleFilterError, message='root() can only be used on numbers: a float is required'):
+        with pytest.raises(AnsibleFilterTypeError, match="root\\(\\) can only be used on numbers: (a float is required|must be real number, not str)"):
             ms.inversepower('a', 10)
 
     def test_square_root(self):
@@ -136,27 +145,27 @@ class TestRekeyOnMember():
     # (Input data structure, member to rekey on, expected error message)
     INVALID_ENTRIES = (
         # Fail when key is not found
-        ([{"proto": "eigrp", "state": "enabled"}], 'invalid_key', "Key invalid_key was not found"),
-        ({"eigrp": {"proto": "eigrp", "state": "enabled"}}, 'invalid_key', "Key invalid_key was not found"),
+        (AnsibleFilterError, [{"proto": "eigrp", "state": "enabled"}], 'invalid_key', "Key invalid_key was not found"),
+        (AnsibleFilterError, {"eigrp": {"proto": "eigrp", "state": "enabled"}}, 'invalid_key', "Key invalid_key was not found"),
         # Fail when key is duplicated
-        ([{"proto": "eigrp"}, {"proto": "ospf"}, {"proto": "ospf"}],
+        (AnsibleFilterError, [{"proto": "eigrp"}, {"proto": "ospf"}, {"proto": "ospf"}],
          'proto', 'Key ospf is not unique, cannot correctly turn into dict'),
         # Fail when value is not a dict
-        (["string"], 'proto', "List item is not a valid dict"),
-        ([123], 'proto', "List item is not a valid dict"),
-        ([[{'proto': 1}]], 'proto', "List item is not a valid dict"),
+        (AnsibleFilterTypeError, ["string"], 'proto', "List item is not a valid dict"),
+        (AnsibleFilterTypeError, [123], 'proto', "List item is not a valid dict"),
+        (AnsibleFilterTypeError, [[{'proto': 1}]], 'proto', "List item is not a valid dict"),
         # Fail when we do not send a dict or list
-        ("string", 'proto', "Type is not a valid list, set, or dict"),
-        (123, 'proto', "Type is not a valid list, set, or dict"),
+        (AnsibleFilterTypeError, "string", 'proto', "Type is not a valid list, set, or dict"),
+        (AnsibleFilterTypeError, 123, 'proto', "Type is not a valid list, set, or dict"),
     )
 
     @pytest.mark.parametrize("list_original, key, expected", VALID_ENTRIES)
     def test_rekey_on_member_success(self, list_original, key, expected):
         assert ms.rekey_on_member(list_original, key) == expected
 
-    @pytest.mark.parametrize("list_original, key, expected", INVALID_ENTRIES)
-    def test_fail_rekey_on_member(self, list_original, key, expected):
-        with pytest.raises(AnsibleFilterError) as err:
+    @pytest.mark.parametrize("expected_exception_type, list_original, key, expected", INVALID_ENTRIES)
+    def test_fail_rekey_on_member(self, expected_exception_type, list_original, key, expected):
+        with pytest.raises(expected_exception_type) as err:
             ms.rekey_on_member(list_original, key)
 
         assert err.value.message == expected

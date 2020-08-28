@@ -17,7 +17,7 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
-from ansible.compat.tests.mock import patch
+from units.compat.mock import patch
 from ansible.modules.network.ios import ios_banner
 from units.modules.utils import set_module_args
 from .ios_module import TestIosModule, load_fixture
@@ -59,4 +59,19 @@ class TestIosBannerModule(TestIosModule):
     def test_ios_banner_nochange(self):
         banner_text = load_fixture('ios_banner_show_banner.txt').strip()
         set_module_args(dict(banner='login', text=banner_text))
+        self.execute_module()
+
+
+class TestIosBannerIos12Module(TestIosBannerModule):
+
+    def load_fixtures(self, commands):
+        show_banner_return_value = (1, '', None)
+        show_running_config_return_value = \
+            (0, load_fixture('ios_banner_show_running_config_ios12.txt').strip(), None)
+        self.exec_command.side_effect = [show_banner_return_value,
+                                         show_running_config_return_value]
+
+    def test_ios_banner_nochange(self):
+        banner_text = load_fixture('ios_banner_show_banner.txt').strip()
+        set_module_args(dict(banner='exec', text=banner_text))
         self.execute_module()

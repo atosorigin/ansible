@@ -1,3 +1,4 @@
 cloud/azure
-posix/ci/cloud/group2/azure
+unsupported
 destructive
+azure_rm_containerregistry_info

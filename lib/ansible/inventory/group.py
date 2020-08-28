@@ -17,9 +17,41 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
-from ansible.errors import AnsibleError
-
 from itertools import chain
+
+from ansible import constants as C
+from ansible.errors import AnsibleError
+from ansible.module_utils._text import to_native, to_text
+from ansible.module_utils.common._collections_compat import Mapping, MutableMapping
+from ansible.utils.display import Display
+from ansible.utils.vars import combine_vars
+
+display = Display()
+
+
+def to_safe_group_name(name, replacer="_", force=False, silent=False):
+    # Converts 'bad' characters in a string to underscores (or provided replacer) so they can be used as Ansible hosts or groups
+
+    warn = ''
+    if name:  # when deserializing we might not have name yet
+        invalid_chars = C.INVALID_VARIABLE_NAMES.findall(name)
+        if invalid_chars:
+            msg = 'invalid character(s) "%s" in group name (%s)' % (to_text(set(invalid_chars)), to_text(name))
+            if C.TRANSFORM_INVALID_GROUP_CHARS not in ('never', 'ignore') or force:
+                name = C.INVALID_VARIABLE_NAMES.sub(replacer, name)
+                if not (silent or C.TRANSFORM_INVALID_GROUP_CHARS == 'silently'):
+                    display.vvvv('Replacing ' + msg)
+                    warn = 'Invalid characters were found in group names and automatically replaced, use -vvvv to see details'
+            else:
+                if C.TRANSFORM_INVALID_GROUP_CHARS == 'never':
+                    display.vvvv('Not replacing %s' % msg)
+                    warn = True
+                    warn = 'Invalid characters were found in group names but not replaced, use -vvvv to see details'
+
+    if warn:
+        display.warning(warn)
+
+    return name
 
 
 class Group:
@@ -30,7 +62,7 @@ class Group:
     def __init__(self, name=None):
 
         self.depth = 0
-        self.name = name
+        self.name = to_safe_group_name(name)
         self.hosts = []
         self._hosts = None
         self.vars = {}
@@ -82,7 +114,7 @@ class Group:
             g.deserialize(parent_data)
             self.parent_groups.append(g)
 
-    def _walk_relationship(self, rel):
+    def _walk_relationship(self, rel, include_self=False, preserve_ordering=False):
         '''
         Given `rel` that is an iterable property of Group,
         consitituting a directed acyclic graph among all groups,
@@ -98,21 +130,34 @@ class Group:
         '''
         seen = set([])
         unprocessed = set(getattr(self, rel))
+        if include_self:
+            unprocessed.add(self)
+        if preserve_ordering:
+            ordered = [self] if include_self else []
+            ordered.extend(getattr(self, rel))
 
         while unprocessed:
             seen.update(unprocessed)
-            unprocessed = set(chain.from_iterable(
-                getattr(g, rel) for g in unprocessed
-            ))
-            unprocessed.difference_update(seen)
+            new_unprocessed = set([])
 
+            for new_item in chain.from_iterable(getattr(g, rel) for g in unprocessed):
+                new_unprocessed.add(new_item)
+                if preserve_ordering:
+                    if new_item not in seen:
+                        ordered.append(new_item)
+
+            new_unprocessed.difference_update(seen)
+            unprocessed = new_unprocessed
+
+        if preserve_ordering:
+            return ordered
         return seen
 
     def get_ancestors(self):
         return self._walk_relationship('parent_groups')
 
-    def get_descendants(self):
-        return self._walk_relationship('child_groups')
+    def get_descendants(self, **kwargs):
+        return self._walk_relationship('child_groups', **kwargs)
 
     @property
     def host_names(self):
@@ -124,7 +169,7 @@ class Group:
         return self.name
 
     def add_child_group(self, group):
-
+        added = False
         if self == group:
             raise Exception("can't add group to itself")
 
@@ -135,12 +180,11 @@ class Group:
             start_ancestors = group.get_ancestors()
             new_ancestors = self.get_ancestors()
             if group in new_ancestors:
-                raise AnsibleError(
-                    "Adding group '%s' as child to '%s' creates a recursive "
-                    "dependency loop." % (group.name, self.name))
+                raise AnsibleError("Adding group '%s' as child to '%s' creates a recursive dependency loop." % (to_native(group.name), to_native(self.name)))
             new_ancestors.add(self)
             new_ancestors.difference_update(start_ancestors)
 
+            added = True
             self.child_groups.append(group)
 
             # update the depth of the child
@@ -157,6 +201,7 @@ class Group:
                     h.populate_ancestors(additions=new_ancestors)
 
             self.clear_hosts_cache()
+        return added
 
     def _check_children_depth(self):
 
@@ -175,29 +220,37 @@ class Group:
                     g.depth = depth
                     unprocessed.update(g.child_groups)
             if depth - start_depth > len(seen):
-                raise AnsibleError("The group named '%s' has a recursive dependency loop." % self.name)
+                raise AnsibleError("The group named '%s' has a recursive dependency loop." % to_native(self.name))
 
     def add_host(self, host):
+        added = False
         if host.name not in self.host_names:
             self.hosts.append(host)
             self._hosts.add(host.name)
             host.add_group(self)
             self.clear_hosts_cache()
+            added = True
+        return added
 
     def remove_host(self, host):
-
+        removed = False
         if host.name in self.host_names:
             self.hosts.remove(host)
             self._hosts.remove(host.name)
             host.remove_group(self)
             self.clear_hosts_cache()
+            removed = True
+        return removed
 
     def set_variable(self, key, value):
 
         if key == 'ansible_group_priority':
             self.set_priority(int(value))
         else:
-            self.vars[key] = value
+            if key in self.vars and isinstance(self.vars[key], MutableMapping) and isinstance(value, Mapping):
+                self.vars[key] = combine_vars(self.vars[key], value)
+            else:
+                self.vars[key] = value
 
     def clear_hosts_cache(self):
 
@@ -215,7 +268,7 @@ class Group:
 
         hosts = []
         seen = {}
-        for kid in self.get_descendants():
+        for kid in self.get_descendants(include_self=True, preserve_ordering=True):
             kid_hosts = kid.hosts
             for kk in kid_hosts:
                 if kk not in seen:
@@ -223,12 +276,6 @@ class Group:
                     if self.name == 'all' and kk.implicit:
                         continue
                     hosts.append(kk)
-        for mine in self.hosts:
-            if mine not in seen:
-                seen[mine] = 1
-                if self.name == 'all' and mine.implicit:
-                    continue
-                hosts.append(mine)
         return hosts
 
     def get_vars(self):
